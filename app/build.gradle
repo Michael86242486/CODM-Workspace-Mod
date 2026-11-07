@@ -1,37 +1,56 @@
-apply plugin: 'com.android.application'
+plugins {
+    id 'com.android.application'
+}
 
 android {
-    compileSdkVersion 30
+    namespace 'com.gotoubun'
+    compileSdk 35
+
     defaultConfig {
         applicationId "com.gotoubun"
-        minSdkVersion 21
-        targetSdkVersion 30
+        minSdk 21
+        targetSdk 35
         versionCode 1
         versionName "1.0"
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         ndk {
+            // Keep existing JNI ABI targets stable.
             abiFilters "armeabi-v7a", "arm64-v8a"
         }
         multiDexEnabled false
     }
+
     buildTypes {
         release {
             minifyEnabled false
             proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
         }
         debug {
-            jniDebuggable = true
+            jniDebuggable true
         }
     }
+
     externalNativeBuild {
+        // Keep the existing ndk-build/JNI setup stable.
         ndkBuild {
             path file("src/main/jni/Android.mk")
         }
     }
+
+    buildFeatures {
+        buildConfig true
+    }
+
     compileOptions {
-        // This library uses Java 8 features, this is required
+        // Java 8 features are required by existing code.
         sourceCompatibility JavaVersion.VERSION_1_8
         targetCompatibility JavaVersion.VERSION_1_8
+    }
+
+    packaging {
+        jniLibs {
+            useLegacyPackaging true
+        }
     }
 }
 

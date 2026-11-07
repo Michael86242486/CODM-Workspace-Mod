@@ -39,13 +39,10 @@ import android.widget.RelativeLayout;
 import android.widget.ScrollView;
 import android.widget.SeekBar;
 import android.widget.Spinner;
-import android.widget.Switch;
 import android.widget.TextView;
 
 
 import android.view.ViewConfiguration;
-import android.app.AlertDialog;
-import android.content.DialogInterface;
 import java.util.Random;
 import android.widget.CheckBox;
 import android.widget.Toast;
@@ -768,7 +765,7 @@ public class Floating extends Service {
     }
 
     void AddSwitch(Object data, String text, boolean checked, CompoundButton.OnCheckedChangeListener listener) {
-        Switch toggle = new Switch(this);
+        android.widget.Switch toggle = new android.widget.Switch(this);
         toggle.setText(text);
         toggle.setTextSize(convertSizeToDp(5.f));
         toggle.setTextColor(Color.WHITE);

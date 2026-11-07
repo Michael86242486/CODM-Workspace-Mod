@@ -3,10 +3,14 @@
 #include "Engine/Canvas.h"
 #include "fake_dlfcn.h"
 #include "Il2Cpp.h"
+#include "RuntimeResolver.h"
 #include "Vector2.hpp"
 #include "Vector3.hpp"
 #include "Quaternion.hpp"
-//extern void StartRuntimeHook(const char *);
+// Runtime symbol resolution:
+// - Primary: Il2Cpp metadata method/field lookups (no static hex offsets).
+// - Optional: KittyMemory-style AOB scanner via RuntimeResolver for libil2cpp.so patterns.
+//   Pass IDA patterns (e.g. "AA BB ?? CC") as the final argument when a hard AOB is needed.
 // ================================================================================================================================ //
 #define SLEEP_TIME 1000LL / 120LL
 
@@ -399,41 +403,36 @@ void *Init_Thread(void *) {
 
     sleep(5);
 
-    Methods["Transform::get_position"] = (uintptr_t) Il2CppGetMethodOffset("UnityEngine.dll", "UnityEngine", "Transform", "get_position");
-    
-    Methods["Camera::get_main"] = (uintptr_t) Il2CppGetMethodOffset("UnityEngine.dll", "UnityEngine", "Camera", "get_main");
-    
-    Methods["Camera::WorldToScreenPoint"] = (uintptr_t) Il2CppGetMethodOffset("UnityEngine.dll", "UnityEngine", "Camera", "WorldToScreenPoint", 1);
-    
-    Methods["Component::get_transform"] = (uintptr_t) Il2CppGetMethodOffset("UnityEngine.dll", "UnityEngine", "Component", "get_transform");
-    
-   Methods["Screen::SetResolution"] = (uintptr_t) Il2CppGetMethodOffset("UnityEngine.dll", "UnityEngine", "Screen", "SetResolution", 3);
-    
-    Methods["Gameplay::get_LocalPawn"] = (uintptr_t) Il2CppGetMethodOffset("Assembly-CSharp.dll", "GameEngine", "GamePlay", "get_LocalPawn");
+    // Resolve Unity/engine methods at runtime (KittyScanner AOB supported via optional last arg).
+    Methods["Transform::get_position"] = RuntimeResolver::ResolveMethod("UnityEngine.dll", "UnityEngine", "Transform", "get_position", 0);
+    Methods["Camera::get_main"] = RuntimeResolver::ResolveMethod("UnityEngine.dll", "UnityEngine", "Camera", "get_main", 0);
+    Methods["Camera::WorldToScreenPoint"] = RuntimeResolver::ResolveMethod("UnityEngine.dll", "UnityEngine", "Camera", "WorldToScreenPoint", 1);
+    Methods["Component::get_transform"] = RuntimeResolver::ResolveMethod("UnityEngine.dll", "UnityEngine", "Component", "get_transform", 0);
+    Methods["Screen::SetResolution"] = RuntimeResolver::ResolveMethod("UnityEngine.dll", "UnityEngine", "Screen", "SetResolution", 3);
+    Methods["Gameplay::get_LocalPawn"] = RuntimeResolver::ResolveMethod("Assembly-CSharp.dll", "GameEngine", "GamePlay", "get_LocalPawn", 0);
 
-    Fields["BaseWorld::m_Game"] = Il2CppGetFieldOffset("Assembly-CSharp.dll", "GameEngine", "BaseWorld", "m_Game");
-    Fields["BaseGame::AllPawns"] = Il2CppGetFieldOffset("Assembly-CSharp.dll", "GameBase", "BaseGame", "AllPawns");
-    Fields["BaseGame::EnemyPawns"] = Il2CppGetFieldOffset("Assembly-CSharp.dll", "GameBase", "BaseGame", "EnemyPawns");
+    // Resolve fields at runtime (no static hex offsets).
+    Fields["BaseWorld::m_Game"] = RuntimeResolver::ResolveField("Assembly-CSharp.dll", "GameEngine", "BaseWorld", "m_Game");
+    Fields["BaseGame::AllPawns"] = RuntimeResolver::ResolveField("Assembly-CSharp.dll", "GameBase", "BaseGame", "AllPawns");
+    Fields["BaseGame::EnemyPawns"] = RuntimeResolver::ResolveField("Assembly-CSharp.dll", "GameBase", "BaseGame", "EnemyPawns");
 
-    Methods["Pawn::SetAimRotation"] = (uintptr_t) Il2CppGetMethodOffset("Assembly-CSharp.dll", "GameBase", "Pawn", "SetAimRotation", 1);
-    Methods["Pawn::get_IsFiring"] = (uintptr_t) Il2CppGetMethodOffset("Assembly-CSharp.dll", "GameBase", "Pawn", "get_IsFiring");
-    Methods["Pawn::IsAiming"] = (uintptr_t) Il2CppGetMethodOffset("Assembly-CSharp.dll", "GameBase", "Pawn", "IsAiming");
+    Methods["Pawn::SetAimRotation"] = RuntimeResolver::ResolveMethod("Assembly-CSharp.dll", "GameBase", "Pawn", "SetAimRotation", 1);
+    Methods["Pawn::get_IsFiring"] = RuntimeResolver::ResolveMethod("Assembly-CSharp.dll", "GameBase", "Pawn", "get_IsFiring", 0);
+    Methods["Pawn::IsAiming"] = RuntimeResolver::ResolveMethod("Assembly-CSharp.dll", "GameBase", "Pawn", "IsAiming", 0);
 
-    Fields["Pawn::m_PlayerInfo"] = Il2CppGetFieldOffset("Assembly-CSharp.dll", "GameBase", "Pawn", "m_PlayerInfo");
-    Fields["Pawn::get_HeadBone"] = Il2CppGetFieldOffset("Assembly-CSharp.dll", "GameBase", "Pawn", "get_HeadBone");
-    Fields["Pawn::m_HeadBone"] = Il2CppGetFieldOffset("Assembly-CSharp.dll", "GameBase", "Pawn", "m_HeadBone");
-    Fields["Pawn::m_Mesh"] = Il2CppGetFieldOffset("Assembly-CSharp.dll", "GameBase", "Pawn", "m_Mesh");
-    Fields["Pawn::m_IsAlive"] = Il2CppGetFieldOffset("Assembly-CSharp.dll", "GameBase", "Pawn", "m_IsAlive");
+    Fields["Pawn::m_PlayerInfo"] = RuntimeResolver::ResolveField("Assembly-CSharp.dll", "GameBase", "Pawn", "m_PlayerInfo");
+    Fields["Pawn::get_HeadBone"] = RuntimeResolver::ResolveField("Assembly-CSharp.dll", "GameBase", "Pawn", "get_HeadBone");
+    Fields["Pawn::m_HeadBone"] = RuntimeResolver::ResolveField("Assembly-CSharp.dll", "GameBase", "Pawn", "m_HeadBone");
+    Fields["Pawn::m_Mesh"] = RuntimeResolver::ResolveField("Assembly-CSharp.dll", "GameBase", "Pawn", "m_Mesh");
+    Fields["Pawn::m_IsAlive"] = RuntimeResolver::ResolveField("Assembly-CSharp.dll", "GameBase", "Pawn", "m_IsAlive");
 
-    Fields["AttackableTarget::m_AttackableInfo"] = Il2CppGetFieldOffset("Assembly-CSharp.dll", "GameEngine", "AttackableTarget", "m_AttackableInfo");
-    Fields["AttackableTargetInfo::m_Health"] = Il2CppGetFieldOffset("Assembly-CSharp.dll", "GameEngine", "AttackableTargetInfo", "m_Health");
-    Fields["AttackableTargetInfo::m_MaxHealth"] = Il2CppGetFieldOffset("Assembly-CSharp.dll", "GameEngine", "AttackableTargetInfo", "m_MaxHealth");
+    Fields["AttackableTarget::m_AttackableInfo"] = RuntimeResolver::ResolveField("Assembly-CSharp.dll", "GameEngine", "AttackableTarget", "m_AttackableInfo");
+    Fields["AttackableTargetInfo::m_Health"] = RuntimeResolver::ResolveField("Assembly-CSharp.dll", "GameEngine", "AttackableTargetInfo", "m_Health");
+    Fields["AttackableTargetInfo::m_MaxHealth"] = RuntimeResolver::ResolveField("Assembly-CSharp.dll", "GameEngine", "AttackableTargetInfo", "m_MaxHealth");
 
-    Fields["PlayerInfo::m_NickName"] = Il2CppGetFieldOffset("Assembly-CSharp.dll", "GameEngine", "PlayerInfo", "m_NickName");
-
+    Fields["PlayerInfo::m_NickName"] = RuntimeResolver::ResolveField("Assembly-CSharp.dll", "GameEngine", "PlayerInfo", "m_NickName");
 
     bInitDone = true;
-
     return 0;
 }
 
