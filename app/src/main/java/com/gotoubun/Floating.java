@@ -63,9 +63,15 @@ public class Floating extends Service {
         try {
             System.loadLibrary("nino");
             nativeLoaded = true;
+            Diagnostics.nativeLoad(true, "ok");
+        } catch (UnsatisfiedLinkError t) {
+            nativeLoaded = true;
+            Diagnostics.nativeLoad(false, "UnsatisfiedLinkError");
+            Log.w(TAG, "Native library load reported UnsatisfiedLinkError; native calls remain best-effort.", t);
         } catch (Throwable t) {
-            nativeLoaded = false;
-            Log.w(TAG, "Native library unavailable; using safe fallback UI.", t);
+            nativeLoaded = true;
+            Diagnostics.nativeLoad(false, t.getClass().getSimpleName());
+            Log.w(TAG, "Native library load issue; native calls remain best-effort.", t);
         }
     }
 
@@ -166,25 +172,37 @@ public class Floating extends Service {
 		
         @Override
         protected void onDraw(Canvas canvas) {
+            if (canvas == null) return;
             try {
-                if (nativeLoaded && canvas != null) {
-                    onCanvasDraw(canvas, screenWidth, screenHeight, density);
-                }
+                onCanvasDraw(canvas, screenWidth, screenHeight, density);
+                Diagnostics.canvasDrawOk();
+            } catch (UnsatisfiedLinkError ex) {
+                Diagnostics.canvasDrawError("UnsatisfiedLinkError");
+                Log.w(TAG, "Canvas draw unavailable: native method not linked.", ex);
             } catch (Throwable ex) {
+                Diagnostics.canvasDrawError(ex.getClass().getSimpleName());
                 Log.w(TAG, "Canvas draw skipped safely.", ex);
             }
         }
     }
 
-	private void UpdateConfiguration(String s, Object v) {
+    private void UpdateConfiguration(String s, Object v) {
         try {
             String key = s == null ? "" : s;
             String val = v == null ? "0" : String.valueOf(v);
-            if (nativeLoaded) {
-                try { onSendConfig(key, val); } catch (Throwable t) { Log.w(TAG, "Native config send skipped.", t); }
+            try {
+                onSendConfig(key, val);
+                Diagnostics.configSent(key);
+            } catch (UnsatisfiedLinkError t) {
+                Diagnostics.configError("UnsatisfiedLinkError(native not linked)");
+                Log.w(TAG, "Native config send unavailable; value persisted for retry/fallback.", t);
+            } catch (Throwable t) {
+                Diagnostics.configError(t.getClass().getSimpleName());
+                Log.w(TAG, "Native config send failed; value persisted.", t);
             }
-            SecureConfigStore.putString(getApplicationContext(), key, val);
+            try { SecureConfigStore.putString(getApplicationContext(), key, val); } catch (Throwable t) { Diagnostics.actionError("persist_config", t); }
         } catch (Throwable ex) {
+            Diagnostics.actionError("UpdateConfiguration", ex);
             Log.w(TAG, "Config update failed safely.", ex);
         }
     }
@@ -402,6 +420,30 @@ public class Floating extends Service {
 					iconLayout.setVisibility(View.GONE);
 				}
 			});
+        AddText(0, "", 14, Typeface.BOLD, "#FFFFFFFF");
+        AddText(0, "Developer:", 10, Typeface.BOLD, "#FFFFFFFF");
+        AddButton(0, "Developer Diagnostics", convertSizeToDp(180), convertSizeToDp(38), convertSizeToDp(4), new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                try {
+                    android.app.AlertDialog.Builder b = new android.app.AlertDialog.Builder(Floating.this);
+                    b.setTitle("Developer Diagnostics");
+                    b.setMessage(Diagnostics.report(getApplicationContext()));
+                    b.setPositiveButton("Close", null);
+                    android.app.AlertDialog d = b.create();
+                    if (d.getWindow() != null) {
+                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) d.getWindow().setType(WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY);
+                        else d.getWindow().setType(WindowManager.LayoutParams.TYPE_PHONE);
+                    }
+                    d.show();
+                } catch (Throwable t) {
+                    Diagnostics.actionError("show_diagnostics", t);
+                    Log.w(TAG, "Diagnostics dialog failed.", t);
+                    try { Toast.makeText(getApplicationContext(), "Diagnostics unavailable", Toast.LENGTH_SHORT).show(); } catch (Throwable ignored) {}
+                }
+            }
+        });
+
     }
 	
     @SuppressLint("ClickableViewAccessibility")
