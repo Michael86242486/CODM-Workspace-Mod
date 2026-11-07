@@ -1,6 +1,7 @@
 #pragma once
 
 #include "Includes.h"
+#include "Tools.h"
 #include "Il2Cpp.h"
 #include "KittyMemory/KittyScanner.h"
 
