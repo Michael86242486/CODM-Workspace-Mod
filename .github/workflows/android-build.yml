@@ -21,10 +21,16 @@ jobs:
 
       - name: Set up Android SDK
         uses: android-actions/setup-android@v3
+        with:
+          # Avoid legacy "tools" package; install required components explicitly below.
+          packages: ""
 
       - name: Install Android SDK/NDK components
         run: |
+          set -euo pipefail
+          yes | sdkmanager --licenses >/dev/null || true
           sdkmanager --install \
+            "cmdline-tools;latest" \
             "platform-tools" \
             "platforms;android-35" \
             "build-tools;35.0.0" \
