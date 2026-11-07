@@ -19,7 +19,6 @@ import android.os.Handler;
 import android.os.IBinder;
 import android.os.Message;
 import android.util.Base64;
-import android.util.Log;
 import android.util.TypedValue;
 import android.view.Display;
 import android.view.Gravity;
@@ -51,32 +50,8 @@ import java.util.Map;
 
 public class Floating extends Service {
 
-    private static final String TAG = "CODM-Workspace";
-    private static volatile boolean nativeLoaded = false;
-    private static volatile boolean nativeLoadAttempted = false;
-
-    private volatile boolean uiInitialized = false;
-
-    private static synchronized void ensureNativeLoaded() {
-        if (nativeLoadAttempted) return;
-        nativeLoadAttempted = true;
-        try {
-            System.loadLibrary("nino");
-            nativeLoaded = true;
-            Diagnostics.nativeLoad(true, "ok");
-        } catch (UnsatisfiedLinkError t) {
-            nativeLoaded = true;
-            Diagnostics.nativeLoad(false, "UnsatisfiedLinkError");
-            Log.w(TAG, "Native library load reported UnsatisfiedLinkError; native calls remain best-effort.", t);
-        } catch (Throwable t) {
-            nativeLoaded = true;
-            Diagnostics.nativeLoad(false, t.getClass().getSimpleName());
-            Log.w(TAG, "Native library load issue; native calls remain best-effort.", t);
-        }
-    }
-
     static {
-        ensureNativeLoaded();
+        System.loadLibrary("nino");
     }
 
     WindowManager windowManager;
@@ -172,61 +147,51 @@ public class Floating extends Service {
 		
         @Override
         protected void onDraw(Canvas canvas) {
-            if (canvas == null) return;
             try {
                 onCanvasDraw(canvas, screenWidth, screenHeight, density);
-                Diagnostics.canvasDrawOk();
-            } catch (UnsatisfiedLinkError ex) {
-                Diagnostics.canvasDrawError("UnsatisfiedLinkError");
-                Log.w(TAG, "Canvas draw unavailable: native method not linked.", ex);
-            } catch (Throwable ex) {
-                Diagnostics.canvasDrawError(ex.getClass().getSimpleName());
-                Log.w(TAG, "Canvas draw skipped safely.", ex);
+                try { Diagnostics.note("onCanvasDraw ok"); } catch (Throwable ignored) {}
+            } catch (Exception ex) {
+                ex.printStackTrace();
             }
         }
     }
 
-    private void UpdateConfiguration(String s, Object v) {
+	private void UpdateConfiguration(String s, Object v) {
         try {
-            String key = s == null ? "" : s;
-            String val = v == null ? "0" : String.valueOf(v);
-            try {
-                onSendConfig(key, val);
-                Diagnostics.configSent(key);
-            } catch (UnsatisfiedLinkError t) {
-                Diagnostics.configError("UnsatisfiedLinkError(native not linked)");
-                Log.w(TAG, "Native config send unavailable; value persisted for retry/fallback.", t);
-            } catch (Throwable t) {
-                Diagnostics.configError(t.getClass().getSimpleName());
-                Log.w(TAG, "Native config send failed; value persisted.", t);
-            }
-            try { SecureConfigStore.putString(getApplicationContext(), key, val); } catch (Throwable t) { Diagnostics.actionError("persist_config", t); }
-        } catch (Throwable ex) {
-            Diagnostics.actionError("UpdateConfiguration", ex);
-            Log.w(TAG, "Config update failed safely.", ex);
+            onSendConfig(s, v.toString());
+                try { Diagnostics.note("config sent: " + s); } catch (Throwable ignored) {}
+            SharedPreferences.Editor configEditor = configPrefs.edit();
+            configEditor.putString(s, v.toString());
+            configEditor.apply();
+        } catch (Exception ex) {
+            ex.printStackTrace();
         }
     }
     
 
     @Override
     public void onDestroy() {
-        try { if (mUpdateCanvas != null && mUpdateCanvas.isAlive()) mUpdateCanvas.interrupt(); } catch (Throwable ignored) {}
-        try { if (mUpdateThread != null && mUpdateThread.isAlive()) mUpdateThread.interrupt(); } catch (Throwable ignored) {}
-        safeRemoveView(iconLayout); safeRemoveView(mainLayout); safeRemoveView(canvasLayout);
-        iconLayout = null; mainLayout = null; canvasLayout = null; uiInitialized = false;
-        try { StartupState.setServiceStarted(getApplicationContext(), false); } catch (Throwable ignored) {}
-        try { super.onDestroy(); } catch (Throwable t) { Log.w(TAG, "onDestroy handled safely.", t); }
-    }
-
-    private void safeRemoveView(View view) {
-        if (view == null || windowManager == null) return;
-        try { windowManager.removeView(view); }
-        catch (Throwable t) { try { windowManager.removeViewImmediate(view); } catch (Throwable t2) { Log.w(TAG, "View removal skipped.", t2); } }
+        super.onDestroy();
+        if (mUpdateCanvas.isAlive()) {
+            mUpdateCanvas.interrupt();
+        }
+        if (mUpdateThread.isAlive()) {
+            mUpdateThread.interrupt();
+        }
+        if (iconLayout != null) {
+            windowManager.removeView(iconLayout);
+        }
+        if (mainLayout != null) {
+            windowManager.removeView(mainLayout);
+        }
+        if (canvasLayout != null) {
+            windowManager.removeView(canvasLayout);
+        }
     }
 
     @Override
     public int onStartCommand(Intent intent, int flags, int startId) {
-        try { super.onStartCommand(intent, flags, startId); } catch (Throwable t) { Log.w(TAG, "onStartCommand handled safely.", t); }
+        super.onStartCommand(intent, flags, startId);
         return START_NOT_STICKY;
     }
 
@@ -237,48 +202,36 @@ public class Floating extends Service {
 
     @Override
     public void onCreate() {
-        try { super.onCreate(); } catch (Throwable t) { Log.w(TAG, "super.onCreate failed safely.", t); }
-        if (uiInitialized) {
-            StartupState.setServiceStarted(getApplicationContext(), true);
-            return; // idempotent: avoid duplicate UI/thread churn
-        }
-        try {
-            configPrefs = getSharedPreferences("config", MODE_PRIVATE);
+        super.onCreate();	
+		    configPrefs = getSharedPreferences("config", MODE_PRIVATE);
+          //  configEditor = configPrefs.edit();
             windowManager = (WindowManager) getSystemService(WINDOW_SERVICE);
-            if (windowManager == null) {
-                StartupState.markFailure(getApplicationContext(), StartupState.Phase.WINDOW_MANAGER_UNAVAILABLE, "window_manager_null");
-                Log.w(TAG, "WindowManager unavailable; service remains in safe fallback mode.");
-                StartupState.setServiceStarted(getApplicationContext(), true);
-                return;
-            }
             Point screenSize = new Point();
             Display display = windowManager.getDefaultDisplay();
-            if (display != null) display.getRealSize(screenSize); else { screenSize.x = 1080; screenSize.y = 1920; }
-            screenWidth = screenSize.x; screenHeight = screenSize.y;
-            screenDpi = getResources() != null ? getResources().getDisplayMetrics().densityDpi : 320;
-            density = getResources() != null ? getResources().getDisplayMetrics().density : 2f;
-            layoutWidth = convertSizeToDp(400); layoutHeight = convertSizeToDp(225);
-            iconSize = convertSizeToDp(40); menuButtonSize = convertSizeToDp(30);
-            tabWidth = convertSizeToDp(0); tabHeight = convertSizeToDp(0);
-            type = Build.VERSION.SDK_INT >= Build.VERSION_CODES.O ? 2038 : WindowManager.LayoutParams.TYPE_PHONE;
-            try { CreateIcon(); } catch (Throwable t) { Log.w(TAG, "CreateIcon failed safely.", t); }
-            try { CreateLayout(); } catch (Throwable t) { Log.w(TAG, "CreateLayout failed safely.", t); }
-            try { CreateCanvas(); } catch (Throwable t) { Log.w(TAG, "CreateCanvas failed safely.", t); }
-            startWorkersOnce();
-            uiInitialized = true;
-            StartupState.setServiceStarted(getApplicationContext(), true);
-            StartupState.markReady(getApplicationContext());
-        } catch (Throwable t) {
-            StartupState.setServiceStarted(getApplicationContext(), false);
-            StartupState.markFailure(getApplicationContext(), StartupState.Phase.STARTUP_FAILED, t.getClass().getSimpleName());
-            Log.w(TAG, "Floating service startup failed safely; fallback preserved.", t);
+            display.getRealSize(screenSize);
+            screenWidth = screenSize.x;
+            screenHeight = screenSize.y;
+            screenDpi = getResources().getDisplayMetrics().densityDpi;
+            density = getResources().getDisplayMetrics().density;
+            layoutWidth = convertSizeToDp(400);
+            layoutHeight = convertSizeToDp(225);
+            iconSize = convertSizeToDp(40);
+            menuButtonSize = convertSizeToDp(30);
+            tabWidth = convertSizeToDp(0);
+            tabHeight = convertSizeToDp(0);
+		    
+		
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                type = 2038;
+            } else {
+                type = 2002;
+            }
+            CreateIcon();
+            CreateLayout();
+            CreateCanvas();
+            mUpdateThread.start();
+            mUpdateCanvas.start();
         }
-    }
-
-    private synchronized void startWorkersOnce() {
-        try { if (mUpdateThread != null && !mUpdateThread.isAlive() && !mUpdateThread.isInterrupted()) mUpdateThread.start(); } catch (Throwable t) { Log.w(TAG, "mUpdateThread start skipped.", t); }
-        try { if (mUpdateCanvas != null && !mUpdateCanvas.isAlive() && !mUpdateCanvas.isInterrupted()) mUpdateCanvas.start(); } catch (Throwable t) { Log.w(TAG, "mUpdateCanvas start skipped.", t); }
-    }
 	
 
     void AddFeatures() {    
@@ -423,24 +376,14 @@ public class Floating extends Service {
         AddText(0, "", 14, Typeface.BOLD, "#FFFFFFFF");
         AddText(0, "Developer:", 10, Typeface.BOLD, "#FFFFFFFF");
         AddButton(0, "Developer Diagnostics", convertSizeToDp(180), convertSizeToDp(38), convertSizeToDp(4), new View.OnClickListener() {
-            @Override
-            public void onClick(View v) {
+            @Override public void onClick(View v) {
                 try {
                     android.app.AlertDialog.Builder b = new android.app.AlertDialog.Builder(Floating.this);
-                    b.setTitle("Developer Diagnostics");
-                    b.setMessage(Diagnostics.report(getApplicationContext()));
-                    b.setPositiveButton("Close", null);
+                    b.setTitle("Developer Diagnostics").setMessage(Diagnostics.report(getApplicationContext())).setPositiveButton("Close", null);
                     android.app.AlertDialog d = b.create();
-                    if (d.getWindow() != null) {
-                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) d.getWindow().setType(WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY);
-                        else d.getWindow().setType(WindowManager.LayoutParams.TYPE_PHONE);
-                    }
+                    if (d.getWindow()!=null) d.getWindow().setType(Build.VERSION.SDK_INT>=26?2038:2002);
                     d.show();
-                } catch (Throwable t) {
-                    Diagnostics.actionError("show_diagnostics", t);
-                    Log.w(TAG, "Diagnostics dialog failed.", t);
-                    try { Toast.makeText(getApplicationContext(), "Diagnostics unavailable", Toast.LENGTH_SHORT).show(); } catch (Throwable ignored) {}
-                }
+                } catch (Throwable t) { try { Toast.makeText(getApplicationContext(), "Diagnostics unavailable", Toast.LENGTH_SHORT).show(); } catch (Throwable ignored) {} }
             }
         });
 
@@ -485,7 +428,7 @@ public class Floating extends Service {
         textTitle.setClickable(true);
         textTitle.setFocusable(true);
         textTitle.setFocusableInTouchMode(true);
-		textTitle.setText(safeTitle());
+		textTitle.setText(Title());
 		textTitle.setTypeface(Typeface.createFromAsset(getAssets(),"fonts/fox.ttf"));
         textTitle.setTextSize(convertSizeToDp(11.f));
         textTitle.setTextColor(Color.BLACK);
@@ -494,7 +437,7 @@ public class Floating extends Service {
 		textTitle = new TextView(this);
         textTitle.setTextSize(16);
         textTitle.setGravity(Gravity.CENTER_HORIZONTAL);
-		textTitle.setText(safeTitle());
+		textTitle.setText(Title());
 		//textTitle.setTypeface(Typeface.DEFAULT_BOLD);
         textTitle.setTypeface(Typeface.createFromAsset(getAssets(), "fonts/fox.ttf"));
         textTitle.setTextColor(Color.WHITE);
@@ -1167,16 +1110,12 @@ public class Floating extends Service {
                 }
             }
             if (msg.what == 1) {
-                try {
-                    String base = safeTitle();
-                    if (textTitle == null || base == null || base.isEmpty() || M_RAND_TITLE == null || M_RAND_TITLE.isEmpty()) return;
-                    Random random = new Random();
-                    int randIdx = random.nextInt(base.length());
-                    int randChoose = random.nextInt(M_RAND_TITLE.length());
-                    char[] newTitle = base.toCharArray();
-                    newTitle[randIdx] = M_RAND_TITLE.charAt(randChoose);
-                    textTitle.setText(String.valueOf(newTitle));
-                } catch (Throwable ignored) {}
+                Random random = new Random();
+				int randIdx = random.nextInt(Title().length());
+                int randChoose = random.nextInt(M_RAND_TITLE.length());
+                char[] newTitle =Title().toCharArray();
+                newTitle[randIdx] = M_RAND_TITLE.charAt(randChoose);
+                textTitle.setText(String.valueOf(newTitle));
             }
         }
     };
@@ -1184,18 +1123,6 @@ public class Floating extends Service {
 	
  
 	
-    private String safeTitle() {
-        if (nativeLoaded) {
-            try {
-                String t = Title();
-                if (t != null && !t.isEmpty()) return t;
-            } catch (Throwable t) {
-                Log.w(TAG, "Native title unavailable; using fallback.", t);
-            }
-        }
-        return "Workspace";
-    }
-
 	native String Title();
 	
     Thread mUpdateCanvas = new Thread() {
