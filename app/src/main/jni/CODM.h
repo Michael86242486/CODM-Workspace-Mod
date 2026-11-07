@@ -65,7 +65,7 @@ uintptr_t GetClosestTarget() {
     float MaxDist = std::numeric_limits<float>::infinity();
 
     void *BaseWorld_Instance = 0;
-    Il2CppGetStaticFieldValue("Assembly-CSharp.dll", "GameEngine", "BaseWorld", "Instance", &BaseWorld_Instance);
+    Il2Cpp::GetStaticFieldValue("Assembly-CSharp.dll", "GameEngine", "BaseWorld", "Instance", &BaseWorld_Instance);
     if (BaseWorld_Instance) {
         auto m_Game = *(uintptr_t *) ((uintptr_t) BaseWorld_Instance + Fields["BaseWorld::m_Game"]);
         if (m_Game) {
@@ -127,7 +127,7 @@ uintptr_t GetInsideFOVTarget() {
     float MaxDist = std::numeric_limits<float>::infinity();
 
     void *BaseWorld_Instance = 0;
-    Il2CppGetStaticFieldValue("Assembly-CSharp.dll", "GameEngine", "BaseWorld", "Instance", &BaseWorld_Instance);
+    Il2Cpp::GetStaticFieldValue("Assembly-CSharp.dll", "GameEngine", "BaseWorld", "Instance", &BaseWorld_Instance);
     if (BaseWorld_Instance) {
         auto m_Game = *(uintptr_t *) ((uintptr_t) BaseWorld_Instance + Fields["BaseWorld::m_Game"]);
         if (m_Game) {
@@ -202,7 +202,7 @@ void native_onCanvasDraw(JNIEnv *env, jobject obj, jobject canvas, int screenWid
     Screen_SetResolution(0, screenWidth, screenHeight, true);
 
     void *BaseWorld_Instance = 0;
-    Il2CppGetStaticFieldValue("Assembly-CSharp.dll", "GameEngine", "BaseWorld", "Instance", &BaseWorld_Instance);
+    Il2Cpp::GetStaticFieldValue("Assembly-CSharp.dll", "GameEngine", "BaseWorld", "Instance", &BaseWorld_Instance);
     if (Tools::IsPtrValid(BaseWorld_Instance)) {
         auto m_Game = *(uintptr_t *) ((uintptr_t) BaseWorld_Instance + Fields["BaseWorld::m_Game"]);
         if (Tools::IsPtrValid((void *) m_Game)) {
@@ -399,7 +399,8 @@ void *Init_Thread(void *) {
 
     LOGI("libil2cpp.so: %p", g_il2cpp);
 
-    Il2CppAttach();
+    Il2Cpp::Attach();
+
 
     sleep(5);
 
