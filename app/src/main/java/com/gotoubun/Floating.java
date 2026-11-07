@@ -19,6 +19,7 @@ import android.os.Handler;
 import android.os.IBinder;
 import android.os.Message;
 import android.util.Base64;
+import android.util.Log;
 import android.util.TypedValue;
 import android.view.Display;
 import android.view.Gravity;
@@ -50,8 +51,24 @@ import java.util.Map;
 
 public class Floating extends Service {
 
+    private static final String TAG = "CODM-Workspace";
+    private static volatile boolean nativeLoaded = false;
+    private static volatile boolean nativeLoadAttempted = false;
+
+    private static synchronized void ensureNativeLoaded() {
+        if (nativeLoadAttempted) return;
+        nativeLoadAttempted = true;
+        try {
+            System.loadLibrary("nino");
+            nativeLoaded = true;
+        } catch (Throwable t) {
+            nativeLoaded = false;
+            Log.w(TAG, "Native library unavailable; using safe fallback UI.", t);
+        }
+    }
+
     static {
-        System.loadLibrary("nino");
+        ensureNativeLoaded();
     }
 
     WindowManager windowManager;
@@ -148,48 +165,47 @@ public class Floating extends Service {
         @Override
         protected void onDraw(Canvas canvas) {
             try {
-                onCanvasDraw(canvas, screenWidth, screenHeight, density);
-            } catch (Exception ex) {
-                ex.printStackTrace();
+                if (nativeLoaded && canvas != null) {
+                    onCanvasDraw(canvas, screenWidth, screenHeight, density);
+                }
+            } catch (Throwable ex) {
+                Log.w(TAG, "Canvas draw skipped safely.", ex);
             }
         }
     }
 
 	private void UpdateConfiguration(String s, Object v) {
         try {
-            onSendConfig(s, v.toString());
-            SharedPreferences.Editor configEditor = configPrefs.edit();
-            configEditor.putString(s, v.toString());
-            configEditor.apply();
-        } catch (Exception ex) {
-            ex.printStackTrace();
+            String key = s == null ? "" : s;
+            String val = v == null ? "0" : String.valueOf(v);
+            if (nativeLoaded) {
+                try { onSendConfig(key, val); } catch (Throwable t) { Log.w(TAG, "Native config send skipped.", t); }
+            }
+            SecureConfigStore.putString(getApplicationContext(), key, val);
+        } catch (Throwable ex) {
+            Log.w(TAG, "Config update failed safely.", ex);
         }
     }
     
 
     @Override
     public void onDestroy() {
-        super.onDestroy();
-        if (mUpdateCanvas.isAlive()) {
-            mUpdateCanvas.interrupt();
-        }
-        if (mUpdateThread.isAlive()) {
-            mUpdateThread.interrupt();
-        }
-        if (iconLayout != null) {
-            windowManager.removeView(iconLayout);
-        }
-        if (mainLayout != null) {
-            windowManager.removeView(mainLayout);
-        }
-        if (canvasLayout != null) {
-            windowManager.removeView(canvasLayout);
-        }
+        try { if (mUpdateCanvas != null && mUpdateCanvas.isAlive()) mUpdateCanvas.interrupt(); } catch (Throwable ignored) {}
+        try { if (mUpdateThread != null && mUpdateThread.isAlive()) mUpdateThread.interrupt(); } catch (Throwable ignored) {}
+        safeRemoveView(iconLayout); safeRemoveView(mainLayout); safeRemoveView(canvasLayout);
+        iconLayout = null; mainLayout = null; canvasLayout = null;
+        try { super.onDestroy(); } catch (Throwable t) { Log.w(TAG, "onDestroy handled safely.", t); }
+    }
+
+    private void safeRemoveView(View view) {
+        if (view == null || windowManager == null) return;
+        try { windowManager.removeView(view); }
+        catch (Throwable t) { try { windowManager.removeViewImmediate(view); } catch (Throwable t2) { Log.w(TAG, "View removal skipped.", t2); } }
     }
 
     @Override
     public int onStartCommand(Intent intent, int flags, int startId) {
-        super.onStartCommand(intent, flags, startId);
+        try { super.onStartCommand(intent, flags, startId); } catch (Throwable t) { Log.w(TAG, "onStartCommand handled safely.", t); }
         return START_NOT_STICKY;
     }
 
@@ -412,7 +428,7 @@ public class Floating extends Service {
         textTitle.setClickable(true);
         textTitle.setFocusable(true);
         textTitle.setFocusableInTouchMode(true);
-		textTitle.setText(Title());
+		textTitle.setText(safeTitle());
 		textTitle.setTypeface(Typeface.createFromAsset(getAssets(),"fonts/fox.ttf"));
         textTitle.setTextSize(convertSizeToDp(11.f));
         textTitle.setTextColor(Color.BLACK);
@@ -421,7 +437,7 @@ public class Floating extends Service {
 		textTitle = new TextView(this);
         textTitle.setTextSize(16);
         textTitle.setGravity(Gravity.CENTER_HORIZONTAL);
-		textTitle.setText(Title());
+		textTitle.setText(safeTitle());
 		//textTitle.setTypeface(Typeface.DEFAULT_BOLD);
         textTitle.setTypeface(Typeface.createFromAsset(getAssets(), "fonts/fox.ttf"));
         textTitle.setTextColor(Color.WHITE);
@@ -1094,12 +1110,16 @@ public class Floating extends Service {
                 }
             }
             if (msg.what == 1) {
-                Random random = new Random();
-				int randIdx = random.nextInt(Title().length());
-                int randChoose = random.nextInt(M_RAND_TITLE.length());
-                char[] newTitle =Title().toCharArray();
-                newTitle[randIdx] = M_RAND_TITLE.charAt(randChoose);
-                textTitle.setText(String.valueOf(newTitle));
+                try {
+                    String base = safeTitle();
+                    if (textTitle == null || base == null || base.isEmpty() || M_RAND_TITLE == null || M_RAND_TITLE.isEmpty()) return;
+                    Random random = new Random();
+                    int randIdx = random.nextInt(base.length());
+                    int randChoose = random.nextInt(M_RAND_TITLE.length());
+                    char[] newTitle = base.toCharArray();
+                    newTitle[randIdx] = M_RAND_TITLE.charAt(randChoose);
+                    textTitle.setText(String.valueOf(newTitle));
+                } catch (Throwable ignored) {}
             }
         }
     };
@@ -1107,6 +1127,18 @@ public class Floating extends Service {
 	
  
 	
+    private String safeTitle() {
+        if (nativeLoaded) {
+            try {
+                String t = Title();
+                if (t != null && !t.isEmpty()) return t;
+            } catch (Throwable t) {
+                Log.w(TAG, "Native title unavailable; using fallback.", t);
+            }
+        }
+        return "Workspace";
+    }
+
 	native String Title();
 	
     Thread mUpdateCanvas = new Thread() {
