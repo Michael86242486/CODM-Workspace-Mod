@@ -55,6 +55,8 @@ public class Floating extends Service {
     private static volatile boolean nativeLoaded = false;
     private static volatile boolean nativeLoadAttempted = false;
 
+    private volatile boolean uiInitialized = false;
+
     private static synchronized void ensureNativeLoaded() {
         if (nativeLoadAttempted) return;
         nativeLoadAttempted = true;
@@ -193,7 +195,8 @@ public class Floating extends Service {
         try { if (mUpdateCanvas != null && mUpdateCanvas.isAlive()) mUpdateCanvas.interrupt(); } catch (Throwable ignored) {}
         try { if (mUpdateThread != null && mUpdateThread.isAlive()) mUpdateThread.interrupt(); } catch (Throwable ignored) {}
         safeRemoveView(iconLayout); safeRemoveView(mainLayout); safeRemoveView(canvasLayout);
-        iconLayout = null; mainLayout = null; canvasLayout = null;
+        iconLayout = null; mainLayout = null; canvasLayout = null; uiInitialized = false;
+        try { StartupState.setServiceStarted(getApplicationContext(), false); } catch (Throwable ignored) {}
         try { super.onDestroy(); } catch (Throwable t) { Log.w(TAG, "onDestroy handled safely.", t); }
     }
 
@@ -216,36 +219,48 @@ public class Floating extends Service {
 
     @Override
     public void onCreate() {
-        super.onCreate();	
-		    configPrefs = getSharedPreferences("config", MODE_PRIVATE);
-          //  configEditor = configPrefs.edit();
+        try { super.onCreate(); } catch (Throwable t) { Log.w(TAG, "super.onCreate failed safely.", t); }
+        if (uiInitialized) {
+            StartupState.setServiceStarted(getApplicationContext(), true);
+            return; // idempotent: avoid duplicate UI/thread churn
+        }
+        try {
+            configPrefs = getSharedPreferences("config", MODE_PRIVATE);
             windowManager = (WindowManager) getSystemService(WINDOW_SERVICE);
+            if (windowManager == null) {
+                StartupState.markFailure(getApplicationContext(), StartupState.Phase.WINDOW_MANAGER_UNAVAILABLE, "window_manager_null");
+                Log.w(TAG, "WindowManager unavailable; service remains in safe fallback mode.");
+                StartupState.setServiceStarted(getApplicationContext(), true);
+                return;
+            }
             Point screenSize = new Point();
             Display display = windowManager.getDefaultDisplay();
-            display.getRealSize(screenSize);
-            screenWidth = screenSize.x;
-            screenHeight = screenSize.y;
-            screenDpi = getResources().getDisplayMetrics().densityDpi;
-            density = getResources().getDisplayMetrics().density;
-            layoutWidth = convertSizeToDp(400);
-            layoutHeight = convertSizeToDp(225);
-            iconSize = convertSizeToDp(40);
-            menuButtonSize = convertSizeToDp(30);
-            tabWidth = convertSizeToDp(0);
-            tabHeight = convertSizeToDp(0);
-		    
-		
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                type = 2038;
-            } else {
-                type = 2002;
-            }
-            CreateIcon();
-            CreateLayout();
-            CreateCanvas();
-            mUpdateThread.start();
-            mUpdateCanvas.start();
+            if (display != null) display.getRealSize(screenSize); else { screenSize.x = 1080; screenSize.y = 1920; }
+            screenWidth = screenSize.x; screenHeight = screenSize.y;
+            screenDpi = getResources() != null ? getResources().getDisplayMetrics().densityDpi : 320;
+            density = getResources() != null ? getResources().getDisplayMetrics().density : 2f;
+            layoutWidth = convertSizeToDp(400); layoutHeight = convertSizeToDp(225);
+            iconSize = convertSizeToDp(40); menuButtonSize = convertSizeToDp(30);
+            tabWidth = convertSizeToDp(0); tabHeight = convertSizeToDp(0);
+            type = Build.VERSION.SDK_INT >= Build.VERSION_CODES.O ? 2038 : WindowManager.LayoutParams.TYPE_PHONE;
+            try { CreateIcon(); } catch (Throwable t) { Log.w(TAG, "CreateIcon failed safely.", t); }
+            try { CreateLayout(); } catch (Throwable t) { Log.w(TAG, "CreateLayout failed safely.", t); }
+            try { CreateCanvas(); } catch (Throwable t) { Log.w(TAG, "CreateCanvas failed safely.", t); }
+            startWorkersOnce();
+            uiInitialized = true;
+            StartupState.setServiceStarted(getApplicationContext(), true);
+            StartupState.markReady(getApplicationContext());
+        } catch (Throwable t) {
+            StartupState.setServiceStarted(getApplicationContext(), false);
+            StartupState.markFailure(getApplicationContext(), StartupState.Phase.STARTUP_FAILED, t.getClass().getSimpleName());
+            Log.w(TAG, "Floating service startup failed safely; fallback preserved.", t);
         }
+    }
+
+    private synchronized void startWorkersOnce() {
+        try { if (mUpdateThread != null && !mUpdateThread.isAlive() && !mUpdateThread.isInterrupted()) mUpdateThread.start(); } catch (Throwable t) { Log.w(TAG, "mUpdateThread start skipped.", t); }
+        try { if (mUpdateCanvas != null && !mUpdateCanvas.isAlive() && !mUpdateCanvas.isInterrupted()) mUpdateCanvas.start(); } catch (Throwable t) { Log.w(TAG, "mUpdateCanvas start skipped.", t); }
+    }
 	
 
     void AddFeatures() {    

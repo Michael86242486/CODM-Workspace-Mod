@@ -14,13 +14,24 @@ import android.widget.Toast;
 public class Launcher {
 
     private static final String TAG = "CODM-Workspace";
+    private static volatile boolean nativeLoaded = false;
+    private static volatile boolean nativeLoadAttempted = false;
+    private static volatile boolean serviceStartRequested = false;
 
-    static {
+    private static synchronized void ensureNativeLoaded() {
+        if (nativeLoadAttempted) return;
+        nativeLoadAttempted = true;
         try {
             System.loadLibrary("nino");
+            nativeLoaded = true;
         } catch (Throwable error) {
+            nativeLoaded = false;
             Log.w(TAG, "Native library unavailable in Launcher; UI/service fallback remains available.", error);
         }
+    }
+
+    static {
+        ensureNativeLoaded();
     }
 
     public static void Init(Object object) {
@@ -32,60 +43,73 @@ public class Launcher {
         Context context = (Context) object;
         Activity activity = (object instanceof Activity) ? (Activity) object : null;
         Context app = context.getApplicationContext();
+        StartupState.setNativeLoaded(app, nativeLoaded);
 
-        if (!StartupGuard.canAttempt(app, "overlay_service")) {
+        if (!StartupState.shouldAttemptFromLifecycle(app, "Launcher.Init")) {
             return;
         }
 
-        // Connectivity guard: do not block local overlay UI, but avoid noisy startup work/log spam
-        // when network-dependent paths fail; record state for diagnostics only.
+        // Connectivity is diagnostic only; local overlay/service startup must remain usable offline.
         if (!isNetworkConnected(app)) {
-            Log.i(TAG, "No active network detected; local overlay/service startup will still proceed safely.");
+            Log.i(TAG, "No active network detected; proceeding with local safe startup.");
         }
 
         try {
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M && !Settings.canDrawOverlays(context)) {
-                StartupGuard.markFailure(app, "overlay_service", "overlay_permission_missing");
-                if (activity != null) {
-                    try {
-                        Intent intent = new Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
-                                Uri.parse("package:" + context.getPackageName()));
-                        if (intent.resolveActivity(context.getPackageManager()) != null) {
-                            activity.startActivity(intent);
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                boolean overlayOk = Settings.canDrawOverlays(context);
+                StartupState.setOverlayPermitted(app, overlayOk);
+                if (!overlayOk) {
+                    StartupState.markFailure(app, StartupState.Phase.OVERLAY_PERMISSION_MISSING, "overlay_permission_missing");
+                    if (activity != null) {
+                        try {
+                            Intent intent = new Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
+                                    Uri.parse("package:" + context.getPackageName()));
+                            if (intent.resolveActivity(context.getPackageManager()) != null) {
+                                activity.startActivity(intent);
+                            }
+                            Toast.makeText(app, "Allow overlay permission, then reopen/resume the app.", Toast.LENGTH_SHORT).show();
+                        } catch (Throwable t) {
+                            Log.w(TAG, "Unable to open overlay settings safely.", t);
                         }
-                        Toast.makeText(app, "Allow overlay permission, then reopen the app.", Toast.LENGTH_SHORT).show();
-                    } catch (Throwable t) {
-                        Log.w(TAG, "Unable to open overlay settings safely.", t);
                     }
+                    return; // keep app alive; retry on resume
                 }
-                return;
+            } else {
+                StartupState.setOverlayPermitted(app, true);
             }
 
             try {
                 nativeInit(context);
             } catch (Throwable t) {
+                StartupState.markFailure(app, StartupState.Phase.NATIVE_MISSING, t.getClass().getSimpleName());
                 Log.w(TAG, "Native init failed; continuing with fallback UI.", t);
+            }
+
+            // Idempotent start request: avoid duplicate start churn from repeated lifecycle events.
+            if (serviceStartRequested && StartupState.isServiceStarted(app)) {
+                Log.i(TAG, "Service already started/requested; skipping duplicate start.");
+                return;
             }
 
             Intent serviceIntent = new Intent(context, Floating.class);
             try {
                 context.startService(serviceIntent);
+                serviceStartRequested = true;
+                StartupState.setServiceStarted(app, true);
+                StartupState.markReady(app);
             } catch (Throwable e) {
-                StartupGuard.markFailure(app, "overlay_service", e.getClass().getSimpleName());
-                Log.w(TAG, "Failed to start Floating service safely.", e);
-                if (activity != null) {
-                    try {
-                        Toast.makeText(app, "Service unavailable; app remains stable. Retry by reopening.", Toast.LENGTH_SHORT).show();
-                    } catch (Throwable ignored) {}
-                }
-                return;
+                serviceStartRequested = false;
+                StartupState.setServiceStarted(app, false);
+                StartupState.markFailure(app, StartupState.Phase.SERVICE_START_FAILED, e.getClass().getSimpleName());
+                Log.w(TAG, "Failed to start Floating service safely; app remains alive for retry.", e);
+                try {
+                    Toast.makeText(app, "Service start delayed; safe fallback active. Retry on reopen/resume.", Toast.LENGTH_SHORT).show();
+                } catch (Throwable ignored) {}
+                return; // do not finish activity
             }
-
-            StartupGuard.markSuccess(app, "overlay_service");
-            StartupGuard.markSuccess(app, "launcher_init");
         } catch (Throwable t) {
-            StartupGuard.markFailure(app, "overlay_service", t.getClass().getSimpleName());
-            Log.w(TAG, "Launcher init failed safely.", t);
+            StartupState.markFailure(app, StartupState.Phase.STARTUP_FAILED, t.getClass().getSimpleName());
+            Log.w(TAG, "Launcher init failed safely; fallback mode preserved.", t);
         }
     }
 
@@ -106,6 +130,8 @@ public class Launcher {
             Init(mContext);
         } catch (UnsatisfiedLinkError ignored) {
             // Native entrypoint unavailable; fallback is intentional.
+        } catch (Throwable t) {
+            Log.w(TAG, "Native init threw; fallback continues.", t);
         }
     }
 
