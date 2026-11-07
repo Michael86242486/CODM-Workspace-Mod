@@ -315,7 +315,8 @@ void *Main_Thread(void *) {
         auto t1 = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now().time_since_epoch()).count();
 
         void *BaseWorld_Instance = 0;
-        Il2CppGetStaticFieldValue("Assembly-CSharp.dll", "GameEngine", "BaseWorld", "Instance", &BaseWorld_Instance);
+        Il2Cpp::GetStaticFieldValue("Assembly-CSharp.dll", "GameEngine", "BaseWorld", "Instance", &BaseWorld_Instance);
+
         if (BaseWorld_Instance) {
             auto m_Game = *(uintptr_t *) ((uintptr_t) BaseWorld_Instance + Fields["BaseWorld::m_Game"]);
             if (m_Game) {
