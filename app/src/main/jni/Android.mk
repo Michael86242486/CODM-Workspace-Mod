@@ -87,7 +87,6 @@ LOCAL_SRC_FILES += sandbox_core/fb/assert.cpp \
                    sandbox_core/fb/jni/OnLoad.cpp \
                    sandbox_core/fb/jni/References.cpp \
                    sandbox_core/fb/jni/WeakReference.cpp \
-                   sandbox_core/fb/jni/android/CpuCapabilities.cpp \
                    sandbox_core/fb/jni/android/ReferenceChecking.cpp \
                    sandbox_core/fb/jni/fbjni.cpp \
                    sandbox_core/fb/jni/jni_helpers.cpp \
@@ -144,6 +143,7 @@ ifeq ($(TARGET_ARCH_ABI), x86)
 endif
 
 LOCAL_CPP_FEATURES := exceptions
+LOCAL_CFLAGS += -DDISABLE_CPUCAP -DDISABLE_XPLAT
 LOCAL_LDLIBS := -llog -landroid -lz -latomic
 
 include $(BUILD_SHARED_LIBRARY)
