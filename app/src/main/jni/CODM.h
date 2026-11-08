@@ -62,6 +62,15 @@ struct HookTarget {
     const char *source;         // "cache" | "resolver" | "learned_aob" | "aob"
 };
 
+
+bool IsValidResolvedAddress(uintptr_t addr, uintptr_t base, size_t size);
+bool IsPlaceholderAob(const uint8_t *aob, const char *mask) {
+    if (!aob || !mask) return true;
+    for (const char *p = mask; *p; ++p) {
+        if (*p != '?') return false;
+    }
+    return true;
+}
 // Fail-closed AOB scanner: scans [start, start + size) for `pattern` masked by `mask`.
 // mask chars: 'x' = byte must match, '?' = wildcard. Returns 0 if not found/invalid.
 uintptr_t find_pattern(const uint8_t *pattern, const char *mask, uintptr_t start, size_t size) {
