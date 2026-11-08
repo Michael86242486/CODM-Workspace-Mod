@@ -53,11 +53,20 @@ LOCAL_SRC_FILES += sandbox_core/Foundation/IOUniformer.cpp \
 # --- sandbox_core Jni sources ---
 LOCAL_SRC_FILES += sandbox_core/Jni/VAJni.cpp
 
-# --- sandbox_core Substrate sources (reuse nino local copies) ---
-LOCAL_SRC_FILES += sandbox_core/Substrate/SubstrateDebug.cpp \
-                   sandbox_core/Substrate/SubstrateHook.cpp \
-                   sandbox_core/Substrate/SubstratePosixMemory.cpp \
-                   sandbox_core/Substrate/hde64.c
+# --- sandbox_core Substrate sources (32-bit ARM and x86 only; no arm64 support) ---
+ifeq ($(TARGET_ARCH_ABI), armeabi-v7a)
+    LOCAL_SRC_FILES += sandbox_core/Substrate/SubstrateDebug.cpp \
+                       sandbox_core/Substrate/SubstrateHook.cpp \
+                       sandbox_core/Substrate/SubstratePosixMemory.cpp \
+                       sandbox_core/Substrate/hde64.c
+endif
+
+ifeq ($(TARGET_ARCH_ABI), x86)
+    LOCAL_SRC_FILES += sandbox_core/Substrate/SubstrateDebug.cpp \
+                       sandbox_core/Substrate/SubstrateHook.cpp \
+                       sandbox_core/Substrate/SubstratePosixMemory.cpp \
+                       sandbox_core/Substrate/hde64.c
+endif
 
 # --- sandbox_core fb static library sources ---
 LOCAL_SRC_FILES += sandbox_core/fb/assert.cpp \
