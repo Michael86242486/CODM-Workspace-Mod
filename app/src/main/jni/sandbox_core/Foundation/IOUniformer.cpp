@@ -116,6 +116,98 @@
     #ifndef __NR_kill
     #define __NR_kill 62
     #endif
+    #ifndef __NR_fstat64
+    #define __NR_fstat64 80
+    #endif
+    #ifndef __NR_mknod
+    #define __NR_mknod 133
+    #endif
+    #ifndef __NR_rename
+    #define __NR_rename 82
+    #endif
+    #ifndef __NR_unlink
+    #define __NR_unlink 87
+    #endif
+    #ifndef __NR_symlink
+    #define __NR_symlink 88
+    #endif
+    #ifndef __NR_link
+    #define __NR_link 86
+    #endif
+    #ifndef __NR_rmdir
+    #define __NR_rmdir 85
+    #endif
+    #ifndef __NR_readlink
+    #define __NR_readlink 89
+    #endif
+    #ifndef __NR_statfs64
+    #define __NR_statfs64 274
+    #endif
+    #ifndef __NR_truncate64
+    #define __NR_truncate64 57
+    #endif
+    #ifndef __NR_chdir
+    #define __NR_chdir 49
+    #endif
+    #ifndef __NR_getcwd
+    #define __NR_getcwd 79
+    #endif
+    #ifndef __NR_openat
+    #define __NR_openat 56
+    #endif
+    #ifndef __NR_open
+    #define __NR_open 56
+    #endif
+    #ifndef __NR_statfs
+    #define __NR_statfs 43
+    #endif
+    #ifndef __NR_lchown
+    #define __NR_lchown 100
+    #endif
+    #ifndef __NR_execve
+    #define __NR_execve 59
+    #endif
+    #ifndef __NR_kill
+    #define __NR_kill 62
+    #endif
+    #ifndef __NR_readlinkat
+    #define __NR_readlinkat 267
+    #endif
+    #ifndef __NR_statfs64
+    #define __NR_statfs64 274
+    #endif
+    #ifndef __NR_truncate64
+    #define __NR_truncate64 57
+    #endif
+    #ifndef __NR_chdir
+    #define __NR_chdir 49
+    #endif
+    #ifndef __NR_getcwd
+    #define __NR_getcwd 79
+    #endif
+    #ifndef __NR_openat
+    #define __NR_openat 56
+    #endif
+    #ifndef __NR_open
+    #define __NR_open 56
+    #endif
+    #ifndef __NR_statfs
+    #define __NR_statfs 43
+    #endif
+    #ifndef __NR_lchown
+    #define __NR_lchown 100
+    #endif
+    #ifndef __NR_execve
+    #define __NR_execve 59
+    #endif
+    #ifndef __NR_kill
+    #define __NR_kill 62
+    #endif
+#endif
+
+// ALOGD macro for debug logging
+#ifndef ALOGD
+#define ALOGD(...) __android_log_print(ANDROID_LOG_DEBUG, "IOUniformer", __VA_ARGS__)
 #endif
 
 bool iu_loaded = false;
