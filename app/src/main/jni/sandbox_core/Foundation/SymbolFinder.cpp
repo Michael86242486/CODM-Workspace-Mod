@@ -8,6 +8,15 @@
 #include <fb/include/fb/ALog.h>
 #include "SymbolFinder.h"
 
+// Android logging macros
+#ifndef ALOGD
+#define ALOGD(...) __android_log_print(ANDROID_LOG_DEBUG, "SymbolFinder", __VA_ARGS__)
+#endif
+#ifndef ALOGE
+#define ALOGE(...) __android_log_print(ANDROID_LOG_ERROR, "SymbolFinder", __VA_ARGS__)
+#endif
+
+
 /* memory map for libraries */
 #define MAX_NAME_LEN 256
 #define MEMORY_ONLY  "[memory]"
