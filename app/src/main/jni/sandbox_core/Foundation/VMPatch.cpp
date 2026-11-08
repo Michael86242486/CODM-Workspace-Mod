@@ -4,6 +4,15 @@
 #include <Jni/VAJni.h>
 #include "VMPatch.h"
 
+// Android logging macros
+#ifndef ALOGD
+#define ALOGD(...) __android_log_print(ANDROID_LOG_DEBUG, "VMPatch", __VA_ARGS__)
+#endif
+#ifndef ALOGE
+#define ALOGE(...) __android_log_print(ANDROID_LOG_ERROR, "VMPatch", __VA_ARGS__)
+#endif
+
+
 namespace FunctionDef {
     typedef void (*Function_DalvikBridgeFunc)(const void **, void *, const void *, void *);
 
