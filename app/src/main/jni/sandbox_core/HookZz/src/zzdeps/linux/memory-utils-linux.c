@@ -4,6 +4,7 @@
 
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 #include <unistd.h>
 
 MemoryLayout *zz_linux_vm_get_memory_layout_via_pid(pid_t pid) {

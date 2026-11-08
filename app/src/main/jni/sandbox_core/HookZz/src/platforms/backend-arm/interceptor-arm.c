@@ -18,6 +18,7 @@
 #include "zzinfo.h"
 
 #include <stdlib.h>
+#include <string.h>
 
 #define ZZ_THUMB_TINY_REDIRECT_SIZE 4
 #define ZZ_THUMB_FULL_REDIRECT_SIZE 8

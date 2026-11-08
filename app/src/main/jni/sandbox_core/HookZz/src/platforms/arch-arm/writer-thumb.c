@@ -17,6 +17,7 @@
 #include "writer-thumb.h"
 
 #include <stdlib.h>
+#include <string.h>
 
 // ATTENTION !!!:
 // 写 writer 部分, 需要参考, `Instrcution Set Encoding` 部分
