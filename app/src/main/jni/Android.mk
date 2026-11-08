@@ -68,6 +68,14 @@ ifeq ($(TARGET_ARCH_ABI), x86)
                        sandbox_core/Substrate/hde64.c
 endif
 
+# --- sandbox_core Substrate arm64 support (And64InlineHook) ---
+ifeq ($(TARGET_ARCH_ABI), arm64-v8a)
+    LOCAL_SRC_FILES += sandbox_core/Substrate/SubstrateDebug.cpp \
+                       sandbox_core/Substrate/SubstrateHook.cpp \
+                       sandbox_core/Substrate/SubstratePosixMemory.cpp \
+                       sandbox_core/Substrate/And64InlineHook.cpp
+endif
+
 # --- sandbox_core fb static library sources ---
 LOCAL_SRC_FILES += sandbox_core/fb/assert.cpp \
                    sandbox_core/fb/jni/ByteBuffer.cpp \

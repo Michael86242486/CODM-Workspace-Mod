@@ -699,12 +699,20 @@ static size_t SubstrateHookFunction(SubstrateProcessRef process, void *symbol, v
     else
         return SubstrateHookFunctionThumb(process, reinterpret_cast<void *>(reinterpret_cast<uintptr_t>(symbol) & ~0x1), replace, result);
 }
+
+#endif
+
+#if defined(__aarch64__)
+// arm64: delegate to And64InlineHook (A64HookFunction)
+#include "And64InlineHook.hpp"
+_extern void MSHookFunction(void *symbol, void *replace, void **result) {
+    A64HookFunction(symbol, replace, result);
+}
 #endif
 
 #if defined(__i386__) || defined(__x86_64__)
 
 #include "SubstrateX86.hpp"
-
 static size_t MSGetInstructionWidthIntel(void *start) {
     hde64s decode;
     return hde64_disasm(start, &decode);
@@ -923,9 +931,11 @@ static void SubstrateHookFunction(SubstrateProcessRef process, void *symbol, voi
 }
 #endif
 
+#if !defined(__aarch64__)
 _extern void MSHookFunction(void *symbol, void *replace, void **result) {
      SubstrateHookFunction(NULL, symbol, replace, result);
 }
+#endif
 
 #if defined(__APPLE__) && defined(__arm__)
 _extern void _Z14MSHookFunctionPvS_PS_(void *symbol, void *replace, void **result) {

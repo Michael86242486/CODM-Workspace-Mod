@@ -1,5 +1,6 @@
 #include <stdio.h>
 #include <elf.h>
+#include <android/log.h>
 #include <Jni/Helper.h>
 #include <malloc.h>
 #include <stdlib.h>
