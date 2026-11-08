@@ -36,10 +36,10 @@ LOCAL_CFLAGS += $(CXX11_FLAGS)
 
 LOCAL_EXPORT_CPPFLAGS := $(CXX11_FLAGS)
 
-LOCAL_LDLIBS := -llog -ldl -landroid
-LOCAL_EXPORT_LDLIBS := -llog
+# Static libraries do not link their own system libraries; export these
+# linker dependencies so the final shared-library consumer links them.
+LOCAL_EXPORT_LDLIBS := -llog -ldl -landroid
 
 LOCAL_MODULE := libfb
 
 include $(BUILD_STATIC_LIBRARY)
-
