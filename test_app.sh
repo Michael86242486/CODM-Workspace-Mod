@@ -131,9 +131,6 @@ done
 check "IOUniformer includes android/log.h" grep -q '#include <android/log.h>' "$JNI/sandbox_core/Foundation/IOUniformer.cpp"
 check "IOUniformer includes sys/syscall.h" grep -q '#include <sys/syscall.h>' "$JNI/sandbox_core/Foundation/IOUniformer.cpp"
 check "IOUniformer defines ALOGE macro" grep -q '#define ALOGE' "$JNI/sandbox_core/Foundation/IOUniformer.cpp"
-check "IOUniformer includes android/log.h" grep -q '#include <android/log.h>' "$JNI/sandbox_core/Foundation/IOUniformer.cpp"
-check "IOUniformer includes sys/syscall.h" grep -q '#include <sys/syscall.h>' "$JNI/sandbox_core/Foundation/IOUniformer.cpp"
-check "IOUniformer defines ALOGE macro" grep -q '#define ALOGE' "$JNI/sandbox_core/Foundation/IOUniformer.cpp"
 check_no "IOUniformer does NOT have __aarch64__ syscall mapping" grep -q '__aarch64__' "$JNI/sandbox_core/Foundation/IOUniformer.cpp"
 
 # CODM.h hook export
