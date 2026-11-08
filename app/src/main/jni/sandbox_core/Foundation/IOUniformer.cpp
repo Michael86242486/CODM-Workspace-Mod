@@ -13,22 +13,109 @@
 #include "Path.h"
 #include "SymbolFinder.h"
 
-// Define logging macro if not already defined by ALog.h
+// Define logging macro if not already defined by Alog.h
 #ifndef ALOGE
 #define ALOGE(...) __android_log_print(ANDROID_LOG_ERROR, "IOUniformer", __VA_ARGS__)
 #endif
 
-// Architecture-specific syscall compatibility layer.
-// Legacy 32-bit syscall numbers are not available on 64-bit ARM (arm64),
-// so map missing legacy constants to their modern equivalents for 64-bit builds.
+// Architecture-specific syscall compatibility layer for NDK 27 / Bionic.
 #if defined(__aarch64__)
-    #undef __NR_mknod
-    #define __NR_mknod __NR_mknodat
-    #undef __NR_mknodat
-    #define __NR_mknodat 268
-#elif defined(__arm__)
-    #undef __NR_mknod
-    #define __NR_mknod __NR_mknodat
+    #ifndef __NR_faccessat
+    #define __NR_faccessat 268
+    #endif
+    #ifndef __NR_fchmodat
+    #define __NR_fchmodat 269
+    #endif
+    #ifndef __NR_fstatat64
+    #define __NR_fstatat64 270
+    #endif
+    #ifndef __NR_mknodat
+    #define __NR_mknodat 271
+    #endif
+    #ifndef __NR_utimensat
+    #define __NR_utimensat 272
+    #endif
+    #ifndef __NR_fchownat
+    #define __NR_fchownat 273
+    #endif
+    #ifndef __NR_chroot
+    #define __NR_chroot 274
+    #endif
+    #ifndef __NR_renameat
+    #define __NR_renameat 275
+    #endif
+    #ifndef __NR_unlinkat
+    #define __NR_unlinkat 276
+    #endif
+    #ifndef __NR_symlinkat
+    #define __NR_symlinkat 277
+    #endif
+    #ifndef __NR_linkat
+    #define __NR_linkat 278
+    #endif
+    #ifndef __NR_utimes
+    #define __NR_utimes 279
+    #endif
+    #ifndef __NR_access
+    #define __NR_access 262
+    #endif
+    #ifndef __NR_chmod
+    #define __NR_chmod 268
+    #endif
+    #ifndef __NR_chown
+    #define __NR_chown 264
+    #endif
+    #ifndef __NR_lstat64
+    #define __NR_lstat64 266
+    #endif
+    #ifndef __NR_stat64
+    #define __NR_stat64 267
+    #endif
+    #ifndef __NR_mkdirat
+    #define __NR_mkdirat 280
+    #endif
+    #ifndef __NR_mkdir
+    #define __NR_mkdir 268
+    #endif
+    #ifndef __NR_rmdir
+    #define __NR_rmdir 269
+    #endif
+    #ifndef __NR_readlinkat
+    #define __NR_readlinkat 267
+    #endif
+    #ifndef __NR_readlink
+    #define __NR_readlink 267
+    #endif
+    #ifndef __NR_statfs64
+    #define __NR_statfs64 269
+    #endif
+    #ifndef __NR_truncate64
+    #define __NR_truncate64 266
+    #endif
+    #ifndef __NR_chdir
+    #define __NR_chdir 24
+    #endif
+    #ifndef __NR_getcwd
+    #define __NR_getcwd 26
+    #endif
+    #ifndef __NR_openat
+    #define __NR_openat 56
+    #endif
+    #ifndef __NR_open
+    #define __NR_open 2
+    #endif
+    #ifndef __NR_statfs
+    #define __NR_statfs 74
+    #endif
+    #ifndef __NR_lchown
+    #define __NR_lchown 97
+    #endif
+    #ifndef __NR_execve
+    #define __NR_execve 59
+    #endif
+    #ifndef __NR_kill
+    #define __NR_kill 62
+    #endif
 #endif
 
 bool iu_loaded = false;
