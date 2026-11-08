@@ -7,6 +7,14 @@ Java_com_gotoubun_Floating_Title(JNIEnv *env, jobject /*thiz*/) {
     return env->NewStringUTF("CODM");
 }
 
+extern "C" JNIEXPORT jstring JNICALL
+Java_com_gotoubun_Floating_nativeGetRuntimeLog(JNIEnv *env, jobject /*thiz*/) {
+    // Thread-safe status snapshot for the floating menu UI.
+    std::string status = GetRuntimeLog();
+    if (status.empty()) status = "Status: Waiting for initialization...";
+    return env->NewStringUTF(status.c_str());
+}
+
 void native_onSendConfig(JNIEnv *env, jobject /*thiz*/, jstring s, jstring v) {
     const char *config = env ? env->GetStringUTFChars(s, 0) : nullptr;
     const char *value = env ? env->GetStringUTFChars(v, 0) : nullptr;
@@ -25,6 +33,7 @@ void native_onSwitch(JNIEnv * /*env*/, jclass /*clazz*/, jint i, jboolean enable
 int Register1(JNIEnv *env) {
     JNINativeMethod methods[] = {
         {"onSendConfig", "(Ljava/lang/String;Ljava/lang/String;)V", (void *) native_onSendConfig},
+        {"nativeGetRuntimeLog", "()Ljava/lang/String;", (void *) Java_com_gotoubun_Floating_nativeGetRuntimeLog},
         {"onCanvasDraw", "(Landroid/graphics/Canvas;IIF)V", (void *) native_onCanvasDraw},
         {"Switch", "(IZ)V", (void *) native_onSwitch},
     };

@@ -35,6 +35,38 @@
 #define LEARNED_AOBS_PATH "/data/data/com.activision.charlie/files/learned_aobs.txt"
 #define LEARNED_AOB_BYTES 16
 
+namespace RuntimeStatus {
+    // Global, thread-safe runtime status log visible to worker thread and UI renderers.
+    std::string runtime_log = "Status: Waiting for initialization...";
+    std::mutex runtime_log_mutex;
+
+    inline void Set(const std::string &msg) {
+        std::lock_guard<std::mutex> lock(runtime_log_mutex);
+        runtime_log = msg;
+        LOGI("%s", runtime_log.c_str());
+    }
+
+    inline std::string Get() {
+        std::lock_guard<std::mutex> lock(runtime_log_mutex);
+        return runtime_log;
+    }
+}
+
+// Requested global, thread-safe runtime status variable.
+std::string runtime_log = "Status: Waiting for initialization...";
+static std::mutex runtime_log_sync;
+inline void SetRuntimeLog(const std::string &msg) {
+    {
+        std::lock_guard<std::mutex> lock(runtime_log_sync);
+        runtime_log = msg;
+    }
+    RuntimeStatus::Set(msg);
+}
+inline std::string GetRuntimeLog() {
+    std::lock_guard<std::mutex> lock(runtime_log_sync);
+    return runtime_log;
+}
+
 std::map<std::string, u_long> Config;
 
 int g_screenWidth = 0, g_screenHeight = 0;
@@ -594,7 +626,27 @@ void native_onCanvasDraw(JNIEnv *env, jobject obj, jobject canvas, int screenWid
 
     g_screenWidth = screenWidth;
     g_screenHeight = screenHeight;
-	
+
+    // Live runtime status overlay (visible on top of menu/ESP canvas).
+    {
+        std::string status = GetRuntimeLog();
+        if (!status.empty()) {
+            float pad = m_Canvas->scaleSize(6.0f);
+            float textSize = m_Canvas->scaleSize(8.5f);
+            float boxW = m_Canvas->scaleSize(360.0f);
+            float boxH = m_Canvas->scaleSize(18.0f);
+            float x = pad;
+            float y = pad;
+            int bg = ARGB(180, 0, 0, 0);
+            int fg = status.find("ERROR") != std::string::npos ? ARGB(255, 255, 90, 90)
+                 : status.find("SUCCESS") != std::string::npos ? ARGB(255, 90, 255, 140)
+                 : ARGB(255, 255, 235, 120);
+            m_Canvas->drawBox(x, y, boxW, boxH, bg);
+            m_Canvas->drawBorder(x, y, boxW, boxH, m_Canvas->scaleSize(1.0f), ARGB(255, 255, 255, 255));
+            m_Canvas->drawText(status.c_str(), x + pad, y + boxH - m_Canvas->scaleSize(4.0f), textSize, Align::LEFT, fg, ARGB(255, 0, 0, 0));
+        }
+    }
+
     float lineSize = m_Canvas->scaleSize(0.8f);
 	
     if (!bInitDone.load(std::memory_order_acquire))
@@ -800,6 +852,7 @@ void AutoAdjustResolution(uintptr_t thiz) {
 static void InstallHooks(uintptr_t il2cppBase, size_t il2cppSize) {
     g_il2cpp = il2cppBase;
     LOGI(TARGET_LIB ": base=%p size=0x%zx", (void *) g_il2cpp, il2cppSize);
+    SetRuntimeLog("Status: Resolving class methods via RuntimeResolver...");
 
     // Attach IL2CPP runtime (needed for string/metadata resolver path).
     Il2Cpp::Attach();
@@ -934,6 +987,7 @@ static void InstallHooks(uintptr_t il2cppBase, size_t il2cppSize) {
     }
 
     // Apply resolved targets (custom hook logic kept intact; install calls remain explicit).
+    bool resolverCriticalFailure = false;
     for (const auto &t : targets) {
         if (!strcmp(t.key, "PlayerController.Update")) {
             Methods["PlayerController::Update"] = t.resolved;
@@ -944,6 +998,7 @@ static void InstallHooks(uintptr_t il2cppBase, size_t il2cppSize) {
                      t.source, (void *) t.resolved, t.resolved - il2cppBase);
             } else {
                 LOGW("PlayerController::Update unresolved; hook skipped (fail-closed)");
+                if (t.image && t.clazz && t.method) resolverCriticalFailure = true;
             }
         } else if (!strcmp(t.key, "AutoAdjustResolution")) {
             if (t.resolved) {
@@ -968,6 +1023,7 @@ static void InstallHooks(uintptr_t il2cppBase, size_t il2cppSize) {
     }
 
     // Resolve Unity/engine methods at runtime (metadata; optional IDA AOB via last arg).
+    SetRuntimeLog("Status: Resolving class methods via RuntimeResolver...");
     Methods["Transform::get_position"] = RuntimeResolver::ResolveMethod("UnityEngine.dll", "UnityEngine", "Transform", "get_position", 0);
     Methods["Camera::get_main"] = RuntimeResolver::ResolveMethod("UnityEngine.dll", "UnityEngine", "Camera", "get_main", 0);
     Methods["Camera::WorldToScreenPoint"] = RuntimeResolver::ResolveMethod("UnityEngine.dll", "UnityEngine", "Camera", "WorldToScreenPoint", 1);
@@ -996,6 +1052,11 @@ static void InstallHooks(uintptr_t il2cppBase, size_t il2cppSize) {
 
     Fields["PlayerInfo::m_NickName"] = RuntimeResolver::ResolveField("Assembly-CSharp.dll", "GameEngine", "PlayerInfo", "m_NickName");
 
+    if (resolverCriticalFailure) {
+        SetRuntimeLog("Status: ERROR - Failed to resolve target function string!");
+    } else {
+        SetRuntimeLog("Status: SUCCESS - All hooks actively linked to game memory!");
+    }
     bInitDone.store(true, std::memory_order_release);
     LOGI("Initialization complete");
 }
@@ -1008,6 +1069,7 @@ static void InstallHooksOnce(uintptr_t il2cppBase, size_t il2cppSize) {
 
 // Asynchronous worker: waits for target library with retry/timeout, then installs hooks once.
 static void *ModWorker(void *) {
+    SetRuntimeLog("Status: Locating libil2cpp.so in RAM...");
     for (int elapsed = 0; elapsed < INIT_TIMEOUT_SEC; elapsed += INIT_RETRY_INTERVAL_SEC) {
         uintptr_t base = 0;
         size_t size = 0;
@@ -1018,6 +1080,7 @@ static void *ModWorker(void *) {
         sleep(INIT_RETRY_INTERVAL_SEC);
     }
 
+    SetRuntimeLog("Status: ERROR - libil2cpp.so not found");
     LOGE("Timed out waiting for " TARGET_LIB " after %d seconds; init aborted", INIT_TIMEOUT_SEC);
     return nullptr;
 }

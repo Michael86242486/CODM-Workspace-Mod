@@ -235,6 +235,33 @@ public class Floating extends Service {
 	
 
     void AddFeatures() {    
+        AddText(0, "Runtime Status :", 10, Typeface.BOLD, "#FFFFFFFF");
+        final TextView runtimeStatusText = new TextView(this);
+        runtimeStatusText.setText(cachedRuntimeLog);
+        runtimeStatusText.setTextColor(Color.parseColor("#FFFFFFFF"));
+        runtimeStatusText.setTypeface(null, Typeface.BOLD);
+        runtimeStatusText.setPadding(convertSizeToDp(5), convertSizeToDp(2), convertSizeToDp(5), convertSizeToDp(8));
+        runtimeStatusText.setTextSize(TypedValue.COMPLEX_UNIT_DIP, 9f);
+        runtimeStatusText.setLayoutParams(new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+        pageLayouts[0].addView(runtimeStatusText);
+        final Handler runtimeStatusHandler = new Handler();
+        runtimeStatusHandler.postDelayed(new Runnable() {
+            @Override public void run() {
+                try {
+                    refreshRuntimeLog();
+                    runtimeStatusText.setText(cachedRuntimeLog);
+                    if (cachedRuntimeLog != null && cachedRuntimeLog.contains("ERROR")) {
+                        runtimeStatusText.setTextColor(Color.parseColor("#FFFF6A6A"));
+                    } else if (cachedRuntimeLog != null && cachedRuntimeLog.contains("SUCCESS")) {
+                        runtimeStatusText.setTextColor(Color.parseColor("#FF6AFF8C"));
+                    } else {
+                        runtimeStatusText.setTextColor(Color.parseColor("#FFFFEB78"));
+                    }
+                } catch (Throwable ignored) {}
+                runtimeStatusHandler.postDelayed(this, 500L);
+            }
+        }, 250L);
+
         AddText(0, "Menu ESP :", 10, Typeface.BOLD, "#FFFFFFFF");
 		AddSwitch(0, "ESP Player Line", false, new CompoundButton.OnCheckedChangeListener() {
 				@Override
@@ -1123,7 +1150,23 @@ public class Floating extends Service {
 	
  
 	
-	native String Title();
+    native String Title();
+    native String nativeGetRuntimeLog();
+    
+    private String cachedRuntimeLog = "Status: Waiting for initialization...";
+    private long lastRuntimeLogPollMs = 0L;
+
+    private void refreshRuntimeLog() {
+        long now = System.currentTimeMillis();
+        if (now - lastRuntimeLogPollMs < 500L) return;
+        lastRuntimeLogPollMs = now;
+        try {
+            String s = nativeGetRuntimeLog();
+            if (s != null && !s.isEmpty()) cachedRuntimeLog = s;
+        } catch (Throwable ignored) {
+            // Keep last known status; native may not be ready yet.
+        }
+    }
 	
     Thread mUpdateCanvas = new Thread() {
         @Override
