@@ -3,6 +3,8 @@
 //
 #include <unistd.h>
 #include <stdlib.h>
+#include <sys/syscall.h>
+#include <android/log.h>
 #include <fb/include/fb/ALog.h>
 #include <Substrate/CydiaSubstrate.h>
 
@@ -10,6 +12,24 @@
 #include "SandboxFs.h"
 #include "Path.h"
 #include "SymbolFinder.h"
+
+// Define logging macro if not already defined by ALog.h
+#ifndef ALOGE
+#define ALOGE(...) __android_log_print(ANDROID_LOG_ERROR, "IOUniformer", __VA_ARGS__)
+#endif
+
+// Architecture-specific syscall compatibility layer.
+// Legacy 32-bit syscall numbers are not available on 64-bit ARM (arm64),
+// so map missing legacy constants to their modern equivalents for 64-bit builds.
+#if defined(__aarch64__)
+    #undef __NR_mknod
+    #define __NR_mknod __NR_mknodat
+    #undef __NR_mknodat
+    #define __NR_mknodat 268
+#elif defined(__arm__)
+    #undef __NR_mknod
+    #define __NR_mknod __NR_mknodat
+#endif
 
 bool iu_loaded = false;
 
