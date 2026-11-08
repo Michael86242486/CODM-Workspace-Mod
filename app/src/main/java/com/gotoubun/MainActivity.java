@@ -1,6 +1,7 @@
 package com.gotoubun;
 
 import android.app.Activity;
+import android.content.Intent;
 import android.os.Bundle;
 import android.util.Log;
 
@@ -9,9 +10,10 @@ public class MainActivity extends Activity {
 
     static {
         try {
+            System.loadLibrary("va++");
             System.loadLibrary("nino");
         } catch (UnsatisfiedLinkError error) {
-            Log.e(TAG, "Failed to load native library 'nino'. App cannot initialize native hooks.", error);
+            Log.e(TAG, "Failed to load native library", error);
         }
     }
 
@@ -19,11 +21,8 @@ public class MainActivity extends Activity {
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
 
-        try {
-            Launcher.Init(this);
-        } catch (Exception error) {
-            Log.e(TAG, "Launcher initialization failed", error);
-            finish();
-        }
+        Intent launcherIntent = new Intent(this, GameLauncher.class);
+        startActivity(launcherIntent);
+        finish();
     }
 }

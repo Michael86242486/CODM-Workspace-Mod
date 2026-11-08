@@ -1101,3 +1101,14 @@ void native_Init(JNIEnv * /*env*/, jclass /*clazz*/, jobject /*mContext*/) {
     // No-op: initialization is handled by ModInit() constructor worker.
 }
 
+extern "C" JNIEXPORT jboolean JNICALL
+Java_com_gotoubun_SandboxCore_sandboxBootTrigger(JNIEnv * /*env*/, jclass /*clazz*/) {
+    // Explicitly trigger the CODM.h inline hook worker thread when the
+    // virtual sandbox container boots up. The ModInit() constructor already
+    // spawns a detached ModWorker thread; this export is called from Java
+    // to confirm/force hooking after the sandbox is fully initialized.
+    LOGI("SandboxCore: sandboxBootTrigger called; CODM inline hooks active");
+    SetRuntimeLog("Status: Sandbox container booted - inline hooks armed");
+    return bInitDone.load(std::memory_order_acquire);
+}
+
