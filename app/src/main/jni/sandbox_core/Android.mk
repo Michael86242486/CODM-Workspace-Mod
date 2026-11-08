@@ -21,8 +21,13 @@ LOCAL_SRC_FILES := Jni/VAJni.cpp \
                    Substrate/SubstrateHook.cpp \
                    Substrate/SubstratePosixMemory.cpp \
 
-LOCAL_LDLIBS := -llog -latomic
-LOCAL_STATIC_LIBRARIES := fb
+LOCAL_LDLIBS := -llog
+# 32-bit ARM may require the compiler atomic runtime. arm64 has native
+# atomics and must not pass -latomic as an untracked linker flag.
+ifeq ($(TARGET_ARCH_ABI),armeabi-v7a)
+LOCAL_LDLIBS += -latomic
+endif
+LOCAL_STATIC_LIBRARIES := libfb
 
 include $(BUILD_SHARED_LIBRARY)
 include $(MAIN_LOCAL_PATH)/fb/Android.mk
