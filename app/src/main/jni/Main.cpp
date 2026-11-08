@@ -67,12 +67,3 @@ JNIEXPORT jint JNICALL JNI_OnLoad(JavaVM *vm, void * /*reserved*/) {
 JNIEXPORT void JNICALL JNI_OnUnload(JavaVM * /*vm*/, void * /*reserved*/) {
 }
 
-// CODM inline hook trigger: when the virtual sandbox boots, the background
-// execution thread launches automatically. This gives find_pattern engine local
-// permissions to read /proc/self/maps mapping blocks seamlessly with zero root errors.
-extern "C" JNIEXPORT jboolean JNICALL
-Java_com_gotoubun_SandboxCore_sandboxBootTrigger(JNIEnv * /*env*/, jclass /*clazz*/) {
-    LOGI("CODM: Sandbox boot trigger activated; inline hooks armed via ModInit worker");
-    SetRuntimeLog("Status: Sandbox container booted - inline hooks armed");
-    return true;
-}
