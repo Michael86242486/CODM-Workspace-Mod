@@ -3,10 +3,17 @@ package com.gotoubun;
 import android.app.Service;
 import android.content.Context;
 import android.content.Intent;
+import android.content.pm.PackageInfo;
 import android.content.pm.PackageManager;
 import android.os.Bundle;
 import android.os.Handler;
+import android.os.IBinder;
 import android.util.Log;
+
+import java.io.File;
+import java.io.FileInputStream;
+import java.io.FileOutputStream;
+import java.io.IOException;
 
 public class SandboxRuntimeService extends Service {
 
@@ -19,11 +26,14 @@ public class SandboxRuntimeService extends Service {
     }
 
     @Override
-    protected void onStart() {
-        super.onStart();
+    public int onStartCommand(Intent intent, int flags, int startId) {
+        if (intent == null) {
+            stopSelf();
+            return START_NOT_STICKY;
+        }
 
-        String gameDir = getIntent().getStringExtra("game_dir");
-        String packageName = getIntent().getStringExtra("package_name");
+        String gameDir = intent.getStringExtra("game_dir");
+        String packageName = intent.getStringExtra("package_name");
 
         new Thread(() -> {
             try {
@@ -35,28 +45,32 @@ public class SandboxRuntimeService extends Service {
 
             stopSelf();
         }).start();
+
+        return START_NOT_STICKY;
     }
 
     private void cloneApkConfig(String gameDirPath, String packageName) throws Exception {
-        android.content.pm.PackageManager pm = getPackageManager();
+        PackageManager pm = getPackageManager();
 
         try {
-            android.content.pm.PackageInfo packageInfo = pm.getPackageInfo(packageName, PackageManager.GET_META_DATA);
+            PackageInfo packageInfo = pm.getPackageInfo(packageName, PackageManager.GET_META_DATA);
             String appSourceDir = packageInfo.applicationInfo.sourceDir;
             if (appSourceDir == null) return;
 
-            java.io.File sourceFile = new java.io.File(appSourceDir);
-            java.io.File destDir = new java.io.File(gameDirPath, packageName.replace('.', '_'));
+            File sourceFile = new File(appSourceDir);
+            File destDir = new File(gameDirPath, packageName.replace('.', '_'));
             destDir.mkdirs();
 
-            java.io.File apk = new java.io.File(destDir, "base.apk");
-            android.os.FileUtils.copyFile(sourceFile, apk);
+            File apk = new File(destDir, "base.apk");
+            copyFile(sourceFile, apk);
 
-            for (String splitPath : packageInfo.applicationInfo.splitSourceDirs) {
-                java.io.File splitFile = new java.io.File(splitPath);
-                java.io.File destSplit = new java.io.File(destDir, "splits/" + splitFile.getName());
-                destSplit.getParentFile().mkdirs();
-                android.os.FileUtils.copyFile(splitFile, destSplit);
+            if (packageInfo.applicationInfo.splitSourceDirs != null) {
+                for (String splitPath : packageInfo.applicationInfo.splitSourceDirs) {
+                    File splitFile = new File(splitPath);
+                    File destSplit = new File(destDir, "splits/" + splitFile.getName());
+                    destSplit.getParentFile().mkdirs();
+                    copyFile(splitFile, destSplit);
+                }
             }
 
             saveSandboxConfig(packageName, gameDirPath, packageInfo, apk);
@@ -67,8 +81,19 @@ public class SandboxRuntimeService extends Service {
         }
     }
 
-    private void saveSandboxConfig(String packageName, String baseDir, android.content.pm.PackageInfo packageInfo, java.io.File apk) throws Exception {
-        java.io.File configFile = new java.io.File(baseDir, "config.txt");
+    private void copyFile(File source, File dest) throws IOException {
+        try (FileInputStream in = new FileInputStream(source);
+             FileOutputStream out = new FileOutputStream(dest)) {
+            byte[] buffer = new byte[8192];
+            int length;
+            while ((length = in.read(buffer)) > 0) {
+                out.write(buffer, 0, length);
+            }
+        }
+    }
+
+    private void saveSandboxConfig(String packageName, String baseDir, PackageInfo packageInfo, File apk) throws Exception {
+        File configFile = new File(baseDir, "config.txt");
         StringBuilder sb = new StringBuilder();
         sb.append("package_name=").append(packageName).append("\n");
         sb.append("version_code=").append(packageInfo.versionCode).append("\n");
@@ -84,7 +109,7 @@ public class SandboxRuntimeService extends Service {
         saveSandboxMemoryMap(packageName, apk);
     }
 
-    private void saveSandboxMemoryMap(String packageName, java.io.File apk) {
+    private void saveSandboxMemoryMap(String packageName, File apk) {
         // Memory map is embedded into shared memory via virtualization kernel hook
         // No root permission needed - reads /proc/self/maps as CODM.h find_pattern engine requires
     }
@@ -92,15 +117,14 @@ public class SandboxRuntimeService extends Service {
     private void runProcessInSandBox(String gameDir, String packageName) {
         try {
             Context context = this;
-            String libPath = "/data/data/" + context.getPackageName() + "/" + gameDir.replace(' ', '_');
 
             SandboxCore sandboxCore = new SandboxCore();
-            com.lody.virtual.client.ipc.VActivityManager am = com.lody.virtual.client.ipc.VActivityManager.get();
+            SandboxCore.VActivityManager am = sandboxCore.getVActivityManager();
 
             Intent launchIntent = context.getPackageManager().getLaunchIntentForPackage(packageName);
             if (launchIntent != null) {
                 launchIntent.putExtra("sandboxed", true);
-                launchIntent.setClassName(context, SandboxActivity.class);
+                launchIntent.setClassName(context.getPackageName(), SandboxActivity.class.getName());
                 mHandler.post(() -> {
                     am.startActivity(launchIntent, packageName.hashCode());
                 });
@@ -109,6 +133,11 @@ public class SandboxRuntimeService extends Service {
         } catch (Exception e) {
             Log.e(TAG, "Sandbox run failed", e);
         }
+    }
+
+    @Override
+    public IBinder onBind(Intent intent) {
+        return null;
     }
 
     @Override

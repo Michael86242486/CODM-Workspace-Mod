@@ -3,6 +3,9 @@ package com.gotoubun;
 import android.app.Service;
 import android.content.Context;
 import android.content.Intent;
+import android.content.pm.ApplicationInfo;
+import android.content.pm.PackageInfo;
+import android.content.pm.PackageManager;
 import android.os.Binder;
 import android.os.IBinder;
 import android.util.Log;
@@ -56,7 +59,7 @@ public class SandboxCore extends Service {
             // blocks seamlessly with zero root permission errors.
             sandboxBootTrigger();
 
-            Log.i(TAG, "SandboxCore initialized: VActivityManager=" + mVActivityManager + 
+            Log.i(TAG, "SandboxCore initialized: VActivityManager=" + mVActivityManager +
                     ", VPackageManager=" + mVPackageManager + ", ZygoteProxy=" + mZygoteProxy);
         } catch (Exception e) {
             Log.e(TAG, "Failed to initialize sandbox", e);
@@ -84,11 +87,11 @@ public class SandboxCore extends Service {
     // VActivityManager - Proxy to virtual activity manager
     // ============================================================
     public static class VActivityManager {
-        private final Context mContext;
+        private final Context mName;
         private static VActivityManager sInstance;
 
         public VActivityManager(Context context) {
-            mContext = context;
+            mName = context;
         }
 
         public static synchronized VActivityManager get(Context context) {
@@ -104,7 +107,7 @@ public class SandboxCore extends Service {
 
         public int startActivity(Intent intent, int userId) {
             try {
-                mContext.startActivity(intent);
+                mName.startActivity(intent);
                 Log.d("VActivityManager", "startActivity: " + intent.getComponent());
                 return 0;
             } catch (Exception e) {
@@ -113,7 +116,7 @@ public class SandboxCore extends Service {
             }
         }
 
-        public void onActivityCreated(ComponentName component, IBinder token, Intent intent,
+        public void onActivityCreated(String component, IBinder token, Intent intent,
                                       String affinity, int taskId, int launchMode, int flags) {
             Log.d("VActivityManager", "onActivityCreated: " + component);
         }
@@ -123,11 +126,11 @@ public class SandboxCore extends Service {
     // VPackageManager - Proxy to virtual package manager
     // ============================================================
     public static class VPackageManager {
-        private final Context mContext;
+        private final Context mName;
         private static VPackageManager sInstance;
 
         public VPackageManager(Context context) {
-            mContext = context;
+            mName = context;
         }
 
         public static synchronized VPackageManager get(Context context) {
@@ -141,18 +144,18 @@ public class SandboxCore extends Service {
             return sInstance;
         }
 
-        public android.content.pm.PackageInfo getPackageInfo(String packageName, int flags, int userId) {
+        public PackageInfo getPackageInfo(String packageName, int flags, int userId) {
             try {
-                return mContext.getPackageManager().getPackageInfo(packageName, flags);
+                return mName.getPackageManager().getPackageInfo(packageName, flags);
             } catch (Exception e) {
                 Log.e("VPackageManager", "getPackageInfo failed", e);
                 return null;
             }
         }
 
-        public java.util.List<android.content.pm.ApplicationInfo> getInstalledApplications(int flags, int userId) {
+        public java.util.List<ApplicationInfo> getInstalledApplications(int flags, int userId) {
             try {
-                return mContext.getPackageManager().getInstalledApplications(flags);
+                return mName.getPackageManager().getInstalledApplications(flags);
             } catch (Exception e) {
                 Log.e("VPackageManager", "getInstalledApplications failed", e);
                 return new java.util.ArrayList<>();
@@ -164,11 +167,11 @@ public class SandboxCore extends Service {
     // ZygoteProxy - Virtual Zygote process proxy for forking sandboxed processes
     // ============================================================
     public static class ZygoteProxy {
-        private final Context mContext;
+        private final Context mName;
         private static ZygoteProxy sInstance;
 
         public ZygoteProxy(Context context) {
-            mContext = context;
+            mName = context;
         }
 
         public static synchronized ZygoteProxy get(Context context) {

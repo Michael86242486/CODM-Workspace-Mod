@@ -2,39 +2,41 @@ package com.gotoubun;
 
 import android.app.Activity;
 import android.content.Intent;
+import android.content.pm.PackageInfo;
+import android.content.pm.PackageManager;
+import android.content.pm.ResolveInfo;
 import android.os.Bundle;
 import android.os.Handler;
+import android.os.Looper;
 import android.util.Log;
 import android.view.View;
 import android.widget.Button;
 import android.widget.GridLayout;
 import android.widget.LinearLayout;
-import android.widget.ListView;
-import android.widget.TextView;
 import android.widget.Toast;
 
+import java.io.File;
+import java.io.FileInputStream;
+import java.io.FileOutputStream;
+import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
 
 public class GameLauncher extends Activity {
 
     private static final String TAG = "GameLauncher";
-    private Handler mHandler;
-    private GridLayout mGamesGrid;
-    private List<Button> mGameButtons;
+    private Handler mHandler = new Handler(Looper.getMainLooper());
+    private List<Button> mGameButtons = new ArrayList<>();
     private Button mAddGameButton;
-    private List<String> mInstalledGames;
+    private List<String> mInstalledGames = new ArrayList<>();
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_game_launcher);
 
-        mHandler = new Handler();
-        mGamesGrid = findViewById(R.id.games_grid);
+        findViewById(R.id.games_grid); // Initialize UI references
         mAddGameButton = findViewById(R.id.btn_add_game);
-        mGameButtons = new ArrayList<>();
-        mInstalledGames = new ArrayList<>();
 
         setupUI();
         loadInstalledGamesAsync();
@@ -43,10 +45,8 @@ public class GameLauncher extends Activity {
     }
 
     private void setupUI() {
-        mGamesGrid.setRowCount(0);
-        mGamesGrid.setColumnCount(1);
-
-        mGamesGrid.addView(mAddGameButton);
+        findViewById(R.id.games_grid).setVisibility(View.GONE);
+        findViewById(R.id.btn_add_game).setVisibility(View.VISIBLE);
     }
 
     private void loadInstalledGamesAsync() {
@@ -58,14 +58,13 @@ public class GameLauncher extends Activity {
 
     private void loadInstalledGames() {
         try {
-            android.content.pm.PackageManager pm = getPackageManager();
+            PackageManager pm = getPackageManager();
             Intent mainIntent = new Intent(Intent.ACTION_MAIN, null);
             mainIntent.addCategory(Intent.CATEGORY_LAUNCHER);
 
-            java.util.List<android.content.pm.ResolveInfo> resolveInfos = pm.queryIntentActivities(
-                    mainIntent, PackageManager.GET_META_DATA);
+            List<ResolveInfo> resolveInfos = pm.queryIntentActivities(mainIntent, PackageManager.GET_META_DATA);
 
-            for (android.content.pm.ResolveInfo info : resolveInfos) {
+            for (ResolveInfo info : resolveInfos) {
                 if (info.activityInfo.packageName.equals(getPackageName())) {
                     continue;
                 }
@@ -82,16 +81,18 @@ public class GameLauncher extends Activity {
     }
 
     private void displayGamesGrid() {
-        mGamesGrid.removeAllViews();
+        GridLayout gamesGrid = findViewById(R.id.games_grid);
+        gamesGrid.setVisibility(View.VISIBLE);
+        mAddGameButton.setVisibility(View.GONE);
 
         for (int i = 0; i < mInstalledGames.size(); i++) {
             String packageName = mInstalledGames.get(i);
             Button gameButton = createGameButton(packageName, "Game " + (i + 1), "Default Icon");
             mGameButtons.add(gameButton);
-            mGamesGrid.addView(gameButton);
+            gamesGrid.addView(gameButton);
         }
 
-        mGamesGrid.addView(mAddGameButton);
+        gamesGrid.addView(mAddGameButton);
     }
 
     private Button createGameButton(String packageName, String title, String iconDescription) {
@@ -129,7 +130,7 @@ public class GameLauncher extends Activity {
 
         File targetDir = new File(cloneDir, packageName.replace('.', '_'));
         if (targetDir.exists()) {
-            android.content.pm.PackageManager pm = getPackageManager();
+            PackageManager pm = getPackageManager();
             Intent launchIntent = pm.getLaunchIntentForPackage(packageName);
             if (launchIntent != null) {
                 startActivity(launchIntent);
@@ -142,20 +143,20 @@ public class GameLauncher extends Activity {
     }
 
     private void copyApkAndConfigs(String packageName, File targetDir) {
-        android.content.pm.PackageManager pm = getPackageManager();
+        PackageManager pm = getPackageManager();
         try {
-            android.content.pm.PackageInfo packageInfo = pm.getPackageInfo(packageName, 0);
+            PackageInfo packageInfo = pm.getPackageInfo(packageName, 0);
 
             File sourceFile = new File(packageInfo.applicationInfo.sourceDir);
             File destFile = new File(targetDir, "base.apk");
-            android.os.FileUtils.copyFile(sourceFile, destFile);
+            copyFile(sourceFile, destFile);
 
             if (packageInfo.applicationInfo.splitSourceDirs != null) {
                 for (String splitPath : packageInfo.applicationInfo.splitSourceDirs) {
                     File splitFile = new File(splitPath);
                     File destSplit = new File(targetDir, "splits/" + splitFile.getName());
                     destSplit.getParentFile().mkdirs();
-                    android.os.FileUtils.copyFile(splitFile, destSplit);
+                    copyFile(splitFile, destSplit);
                 }
             }
 
@@ -166,7 +167,18 @@ public class GameLauncher extends Activity {
         }
     }
 
-    private void saveConfigToFile(String packageName, File targetDir, android.content.pm.PackageInfo packageInfo) {
+    private void copyFile(File source, File dest) throws IOException {
+        try (FileInputStream in = new FileInputStream(source);
+             FileOutputStream out = new FileOutputStream(dest)) {
+            byte[] buffer = new byte[8192];
+            int length;
+            while ((length = in.read(buffer)) > 0) {
+                out.write(buffer, 0, length);
+            }
+        }
+    }
+
+    private void saveConfigToFile(String packageName, File targetDir, PackageInfo packageInfo) {
         File configFile = new File(targetDir, "config.txt");
         try (java.io.BufferedWriter writer = new java.io.BufferedWriter(
                 new java.io.FileWriter(configFile))) {
@@ -214,9 +226,10 @@ public class GameLauncher extends Activity {
                 mInstalledGames.add(newPackageName);
                 Button newButton = createGameButton(newPackageName, "Game " + (mInstalledGames.size()), "New Icon");
                 mGameButtons.add(newButton);
-                mGamesGrid.addView(newButton);
-                mGamesGrid.removeView(mAddGameButton);
-                mGamesGrid.addView(mAddGameButton);
+                GridLayout gamesGrid = findViewById(R.id.games_grid);
+                gamesGrid.addView(newButton);
+                gamesGrid.removeView(mAddGameButton);
+                gamesGrid.addView(mAddGameButton);
             }
         }
     }
