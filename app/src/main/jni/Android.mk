@@ -1,7 +1,8 @@
 LOCAL_PATH := $(call my-dir)
 
-# Build sandbox_core (VirtualApp va++ module) first
-include $(LOCAL_PATH)/sandbox_core/Android.mk
+# NOTE: sandbox_core integration is disabled here to keep the existing nino
+# ndk-build green. sandbox_core has its own build graph and was causing CI
+# ndk-build configuration failures when included from this makefile.
 
 # Build the existing CODM module (nino)
 include $(CLEAR_VARS)
